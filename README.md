@@ -22,6 +22,7 @@ python tests/browser.py
 python tests/pdf_browser.py
 python tests/organizer_browser.py
 python tests/merge_visual_browser.py
+python tests/mixed_merge_browser.py
 ```
 
 Browser checks require the local server, use `/usr/bin/chromium`, and save a screenshot in `work/`.
@@ -69,7 +70,7 @@ The screenshot is a long-term tool catalog, not a list of currently supported fe
 
 ## Visual page organizer
 
-Organize accepts one source PDF. Merge accepts 2–50 PDFs, with additional files appended on later selections. Both tools share the same thumbnail-card workspace, with a magnifier preview, clockwise rotate and delete controls on each card. Limits are 50 MB and 500 original pages across all loaded sources (deleted pages do not free that import limit). Page labels retain their original numbers, while position labels show the output order. At least one page must remain. Selection alone does not change the output; delete and rotate actions affect selected pages. Reset restores the original order/rotation across all imported documents and can itself be undone. Only the 30 most recent editing states are kept.
+Organize accepts one source PDF. Merge accepts 2–50 PDFs or images, with additional files appended on later selections. PNG, JPG/JPEG, WebP, GIF, BMP, AVIF and SVG images are converted to one PDF page each. Other browser-decodable image formats are attempted; HEIC/TIFF support is browser-dependent. Both tools share the same thumbnail-card workspace, with a magnifier preview, clockwise rotate and delete controls on each card. Images have a 20 MB / 40 MP per-file limit. Limits are 50 MB and 500 original pages across all loaded sources (deleted pages do not free that import limit). Page labels retain their original numbers, while position labels show the output order. At least one page must remain. Selection alone does not change the output; delete and rotate actions affect selected pages. Reset restores the original order/rotation across all imported documents and can itself be undone. Only the 30 most recent editing states are kept.
 
 PDF.js 6.5.438 (Apache-2.0) renders thumbnails in a local worker. Worker, fonts, CMaps, WASM decoders and licenses are published under `/vendor/pdfjs/`. Only visual merge and the page organizer load PDF.js; other tools keep their previous loading behavior. The CSP allows same-origin workers and WebAssembly compilation (`wasm-unsafe-eval`), without permitting JavaScript eval or remote scripts. Preview rendering disables PDF.js eval support and does not run document scripts or create interactive PDF annotation links.
 
@@ -78,3 +79,9 @@ Thumbnails render sequentially near the viewport. Offscreen image URLs are relea
 `tests/organizer_browser.py` checks real painted previews with production CSP, drag ordering, page/selection edits, undo/reset, independent parsing of saved PDF text and rotations, error recovery, mobile controls, lazy rendering and local asset requests. Modern browsers supporting module workers and the current PDF.js runtime are required. Preview/export fidelity for complex documents can vary; retain the original.
 
 The page-card magnifier opens a native modal dialog with a larger rendered page, an accessible close button and Escape support. Page ordering controls remain available under each card’s Change position disclosure. On phones, card controls remain visible. `tests/merge_visual_browser.py` verifies multi-file imports/appends, cross-document ordering, individual page rotation/deletion, atomic failed batches, modal focus and independently parsed PDF output.
+
+## Mixed-file merge
+
+`/merge-pdf/` accepts a mixture of PDFs and images, retaining input file order. PDFs remain PDF pages; images are decoded locally, respecting browser EXIF orientation, and embedded as PNG-backed PDF pages. Image aspect ratio and transparency are preserved. Page dimensions use one PDF point per image pixel, scaled down proportionally if a side would exceed 14,400 PDF points. Animations and multi-frame images contribute one still frame; SVG is rasterized. Re-encoding does not recover lost image detail and can increase file size.
+
+No external conversion service or new decoder dependency is used. Formats not decoded by the current browser produce a clear error recommending PNG/JPG. A rejected batch does not partially import or replace previously loaded files. `tests/mixed_merge_browser.py` checks actual PNG/JPEG/WebP/GIF/BMP/AVIF/SVG files under production CSP, mixed output text/colors/dimensions, transparent PNG, EXIF rotation, animated GIF, image-only/drop merging, import limits and atomic failures.

@@ -215,11 +215,44 @@ async function disposePreview() {
 function originalPages() {
  return sources.flatMap(source => Array.from({length:source.count}, (_,index)=>({id:source.start+index, sourceId:source.id, index, turn:0, selected:false})));
 }
+const imageExtension = /\.(png|jpe?g|webp|gif|bmp|avif|svg|ico|tiff?|heic|heif)$/i;
+const pdfCandidate = file => /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+const imageCandidate = file => file.type.startsWith('image/') || imageExtension.test(file.name);
+async function imageAsPdf(file, bytes) {
+ if(file.size > 20*1024*1024) throw Error('image-size');
+ const extension=file.name.split('.').pop().toLowerCase();
+ const mime={svg:'image/svg+xml',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',gif:'image/gif',bmp:'image/bmp',avif:'image/avif',ico:'image/x-icon',tif:'image/tiff',tiff:'image/tiff',heic:'image/heic',heif:'image/heif'}[extension];
+ const blob=new Blob([bytes],{type:file.type.startsWith('image/')?file.type:(mime||'application/octet-stream')});
+ let image=null, url=null, canvas=null;
+ try {
+  try { image=await createImageBitmap(blob); }
+  catch { url=URL.createObjectURL(blob); image=new Image(); image.src=url; await image.decode(); }
+  const width=image.naturalWidth||image.width, height=image.naturalHeight||image.height;
+  if(!width||!height) throw Error('image-format');
+  if(width*height > 40000000) throw Error('image-pixels');
+  canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+  const context=canvas.getContext('2d');if(!context) throw Error('image-format');
+  // Decode EXIF orientation and freeze animated formats into a single page.
+  context.drawImage(image,0,0);
+  const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!png) throw Error('image-format');
+  const doc=await window.PDFLib.PDFDocument.create();
+  const embedded=await doc.embedPng(await png.arrayBuffer());
+  // Keep each page within the PDF page-size limit, preserving the aspect ratio.
+  const scale=Math.min(1,14400/width,14400/height);
+  const page=doc.addPage([width*scale,height*scale]);page.drawImage(embedded,{x:0,y:0,width:width*scale,height:height*scale});
+  return {doc, bytes:await doc.save()};
+ } catch(error) {
+  if(['image-size','image-pixels'].includes(error.message))throw error;
+  throw Error('image-format');
+ } finally {
+  image?.close?.();if(url)URL.revokeObjectURL(url);if(canvas){canvas.width=0;canvas.height=0;}
+ }
+}
 async function loadFiles(incoming) {
  const files = Array.from(incoming);
  if (busy || !files.length) return;
- if ((!mergeMode && files.length !== 1) || files.length + (mergeMode ? sources.length : 0) > 50 || files.some(file=>!file.size || (!/\.pdf$/i.test(file.name) && file.type!=='application/pdf')) || files.reduce((n,f)=>n+f.size,0)+(mergeMode?sources.reduce((n,s)=>n+s.size,0):0)>50*1024*1024) {
-  announce(t('Choose PDFs up to 50 MB total, maximum 50 files. Organize accepts one PDF. Current edits have been kept.', 'Выберите PDF до 50 МБ суммарно, максимум 50 файлов. Организация принимает один PDF. Текущие изменения сохранены.')); return;
+ if ((!mergeMode && files.length !== 1) || files.length + (mergeMode ? sources.length : 0) > 50 || files.some(file=>!file.size || !(pdfCandidate(file) || (mergeMode && imageCandidate(file)))) || files.reduce((n,f)=>n+f.size,0)+(mergeMode?sources.reduce((n,s)=>n+s.size,0):0)>50*1024*1024) {
+  announce(t('Choose PDFs or images up to 50 MB total, maximum 50 files. Organize accepts one PDF. Current edits have been kept.', 'Выберите PDF или изображения до 50 МБ суммарно, максимум 50 файлов. Организация принимает один PDF. Текущие изменения сохранены.')); return;
  }
  busy = true; controls(); closeZoom();
  const version = ++revision, pending = [];
@@ -228,8 +261,10 @@ async function loadFiles(incoming) {
  try {
   let total = sources.reduce((n,s)=>n+s.count,0);
   for (const file of files) {
-   const bytes = new Uint8Array(await file.arrayBuffer());
-   const doc = await window.PDFLib.PDFDocument.load(bytes);
+   let bytes = new Uint8Array(await file.arrayBuffer()), doc;
+   if(mergeMode && !pdfCandidate(file) && imageCandidate(file)) {
+    const converted=await imageAsPdf(file,bytes);doc=converted.doc;bytes=converted.bytes;
+   } else {doc=await window.PDFLib.PDFDocument.load(bytes);}
    const count = doc.getPageCount();
    if (!count || total + count > 500) throw Error('page-limit');
    const task = pdfjs.getDocument({data:bytes, isEvalSupported:false, useSystemFonts:true, cMapUrl:'/vendor/pdfjs/cmaps/', cMapPacked:true, standardFontDataUrl:'/vendor/pdfjs/standard_fonts/', wasmUrl:'/vendor/pdfjs/wasm/'});
@@ -241,14 +276,19 @@ async function loadFiles(incoming) {
   if (mergeMode && sources.length) remember();
   const added = pending.flatMap(source=>Array.from({length:source.count},(_,index)=>({id:source.start+index, sourceId:source.id, index, turn:0, selected:false})));
   sources.push(...pending); pages.push(...added); clearDownload(); sourceName=sources[0].name;
-  get('editor-filename').textContent = mergeMode ? t(`${sources.length} PDF files`, `PDF-файлов: ${sources.length}`) : sourceName;
+  get('editor-filename').textContent = mergeMode ? t(`${sources.length} files`, `Файлов: ${sources.length}`) : sourceName;
   workspace.hidden=false; render();
   cards.get(added[0]?.id)?.scrollIntoView({block:'start'});
-  announce(mergeMode && sources.length<2 ? t('Add another PDF to merge. You can already edit its pages.', 'Добавьте ещё один PDF для объединения. Страницы уже можно редактировать.') : t('Pages are ready. Rotate, remove or drag them into the order you want.', 'Страницы готовы. Поворачивайте, удаляйте и перетаскивайте их в нужном порядке.'));
+  announce(mergeMode && sources.length<2 ? t('Add another PDF or image to merge. You can already edit its pages.', 'Добавьте ещё один PDF или изображение для объединения. Страницы уже можно редактировать.') : t('Pages are ready. Rotate, remove or drag them into the order you want.', 'Страницы готовы. Поворачивайте, удаляйте и перетаскивайте их в нужном порядке.'));
  } catch(error) {
   await Promise.all(pending.map(async source=>{try{await source.task.destroy();}catch{}}));
   if (!mergeMode) { pages=[]; workspace.hidden=true; }
-  announce(error.message==='page-limit' ? t('Limit: 1–500 pages across all loaded PDFs.', 'Лимит: 1–500 страниц во всех загруженных PDF.') : t('Cannot open PDF. It may be encrypted, damaged or unsupported. Previously loaded files have been kept.', 'Не удалось открыть PDF. Он может быть зашифрован, повреждён или не поддерживаться. Ранее добавленные файлы сохранены.'));
+  const imageErrors={
+   'image-size':t('Each image must be 20 MB or smaller.', 'Каждое изображение должно быть не больше 20 МБ.'),
+   'image-pixels':t('Image exceeds the 40 megapixel limit.', 'Изображение превышает лимит 40 мегапикселей.'),
+   'image-format':t('Cannot open image: it is damaged or this browser does not support its format. Convert it to PNG or JPG and try again. Previously loaded files have been kept.', 'Не удалось открыть изображение: файл повреждён или браузер не поддерживает его формат. Преобразуйте его в PNG или JPG и повторите. Ранее добавленные файлы сохранены.')
+  };
+  announce(imageErrors[error.message] || (error.message==='page-limit' ? t('Limit: 1–500 pages across all loaded PDFs.', 'Лимит: 1–500 страниц во всех загруженных PDF.') : t('Cannot open PDF. It may be encrypted, damaged or unsupported. Previously loaded files have been kept.', 'Не удалось открыть PDF. Он может быть зашифрован, повреждён или не поддерживаться. Ранее добавленные файлы сохранены.')));
  } finally { busy=false; controls(); render(); }
 }
 input.addEventListener('change', () => { const files=Array.from(input.files); input.value=''; void loadFiles(files); });

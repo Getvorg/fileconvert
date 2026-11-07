@@ -7,7 +7,7 @@ export const groups = {
 };
 export const tools = [
  {slug:'organize-pdf', group:'organize', icon:'▦', name:['Organize PDF pages','Организовать страницы PDF'], description:['Preview, reorder, delete and rotate pages in one visual workspace.','Просматривайте, переставляйте, удаляйте и поворачивайте страницы в одном окне.']},
- {slug:'merge-pdf', group:'organize', icon:'⇲', name:['Merge PDF','Объединить PDF'], description:['Combine PDF files into one document in your preferred order.','Объединяйте PDF-файлы в один документ в нужном порядке.']},
+ {slug:'merge-pdf', group:'organize', icon:'⇲', name:['Merge PDF','Объединить PDF'], description:['Combine PDFs and images into one document; arrange, rotate and remove pages.','Объединяйте PDF и изображения: меняйте порядок, поворачивайте и удаляйте страницы.']},
  {slug:'split-pdf', group:'organize', icon:'⇱', name:['Split PDF','Разделить PDF'], description:['Extract a page range or save every page as a separate PDF.','Извлеките нужные страницы или сохраните каждую в отдельный PDF.']},
  {slug:'jpg-to-pdf', group:'convert', icon:'▧', name:['JPG to PDF','JPG в PDF'], description:['Turn JPG images into a PDF. Arrange images and choose the page size.','Соберите JPG-изображения в PDF. Настройте порядок и размер страниц.']},
  {slug:'rotate-pdf', group:'edit', icon:'↻', name:['Rotate PDF','Повернуть PDF'], description:['Rotate all pages or selected pages by 90, 180 or 270 degrees.','Поверните все или выбранные страницы на 90, 180 или 270 градусов.']},
