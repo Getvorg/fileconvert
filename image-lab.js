@@ -1,6 +1,6 @@
 import {zipSync} from '/vendor/fflate.mjs';
 const root=document.querySelector('[data-image-lab]');
-const mode=root.dataset.imageLab,resize=mode==='resize',crop=mode==='crop',convert=mode==='convert',suffix=resize?'resized':crop?'cropped':convert?'converted':'compressed',ru=document.documentElement.lang==='ru',t=(en,r)=>ru?r:en,get=id=>document.getElementById(id);
+const mode=root.dataset.imageLab,resize=mode==='resize',crop=mode==='crop',convert=mode==='convert',suffix=resize?'resized':crop?'cropped':convert?'converted':'compressed',t=(en,r)=>FileI18n.t(en,r),get=id=>document.getElementById(id);
 const input=get('lab-files'),cards=get('lab-cards'),run=get('lab-run'),results=get('lab-results'),feedback=get('lab-feedback');
 const panel=FileWorkspace.savePanel({root,button:run,results,name:resize?'resized.zip':'compressed.zip'}),edits=FileWorkspace.history();
 let records=[],busy=false,downloadURL=null,previousSettings={},dragSerial=0;
@@ -35,7 +35,7 @@ function render(){
 }
 async function addFiles(files){
  if(busy||!files.length)return;const batch=Array.from(files);
- if((convert&&batch.some(file=>sourceMime(file)!==root.dataset.inputMime))||records.length+batch.length>50||batch.some(f=>!f.size||f.size>20*1024*1024||!(/\.(jpe?g|png|webp)$/i.test(f.name)||['image/jpeg','image/png','image/webp'].includes(f.type)))||records.reduce((n,r)=>n+r.file.size,0)+batch.reduce((n,f)=>n+f.size,0)>50*1024*1024){feedback.textContent=convert?t('Choose '+root.dataset.inputMime.split('/')[1].toUpperCase()+' images: up to 20 MB each and 50 MB total.','Выберите '+root.dataset.inputMime.split('/')[1].toUpperCase()+': до 20 МБ каждое и 50 МБ суммарно.'):t('Use JPG, PNG or WebP: 20 MB each, 50 MB total, up to 50 files.','Выберите JPG, PNG или WebP: до 20 МБ каждое, 50 МБ суммарно, до 50 файлов.');return;}
+ if((convert&&batch.some(file=>sourceMime(file)!==root.dataset.inputMime))||records.length+batch.length>50||batch.some(f=>!f.size||f.size>20*1024*1024||!(/\.(jpe?g|png|webp)$/i.test(f.name)||['image/jpeg','image/png','image/webp'].includes(f.type)))||records.reduce((n,r)=>n+r.file.size,0)+batch.reduce((n,f)=>n+f.size,0)>50*1024*1024){feedback.textContent=convert?t(`Choose ${root.dataset.inputMime.split('/')[1].toUpperCase()} images: up to 20 MB each and 50 MB total.`,`Выберите ${root.dataset.inputMime.split('/')[1].toUpperCase()}: до 20 МБ каждое и 50 МБ суммарно.`):t('Use JPG, PNG or WebP: 20 MB each, 50 MB total, up to 50 files.','Выберите JPG, PNG или WebP: до 20 МБ каждое, 50 МБ суммарно, до 50 файлов.');return;}
  busy=true;render();const pending=[];
  try{
   for(const file of batch){const url=URL.createObjectURL(file);const record={file,url,turn:0,key:++dragSerial,width:0,height:0,crop:{x:0,y:0,w:1,h:1}};pending.push(record);const img=new Image();img.src=url;await img.decode();record.width=img.naturalWidth;record.height=img.naturalHeight;if(crop)record.crop=centerCrop(record,get('crop-ratio').value);if(!record.width||record.width*record.height>40000000)throw Error(t('Image exceeds 40 megapixels.','Изображение превышает 40 мегапикселей.'));}

@@ -38,7 +38,7 @@ Browser checks require the local server, use `/usr/bin/chromium`, and save a scr
 2. Add the production environment variable `SITE_URL=https://your-domain.tld` (HTTPS origin only). Add `CONTACT_EMAIL` for a private support address; otherwise contact links to public GitHub issues.
 3. Add your owned domain in Netlify Domain management. Apply the DNS records Netlify supplies at your registrar. Wait for domain verification and HTTPS certificate provisioning.
 4. Choose the primary hostname, redirect the alternative hostname, and rebuild with the matching `SITE_URL`.
-5. Check all EN/RU routes, HTTPS, canonical links, `/robots.txt`, `/sitemap.xml`, the real contact address, and an unknown URL returning HTTP 404.
+5. Check all seven language versions, HTTPS, canonical links, `/robots.txt`, `/sitemap.xml`, the real contact address, and an unknown URL returning HTTP 404.
 6. Register the domain in Google Search Console, verify ownership through DNS, and submit `/sitemap.xml`. Indexing and advertising approval are not guaranteed.
 
 To build elsewhere, provide the same variables and upload only `dist/`. Configure the host to serve directory `index.html`, real 404 responses, HTTPS, and the security headers from `netlify.toml`. Do not enable a blanket SPA fallback.
@@ -146,7 +146,7 @@ Compression defaults to the source format and quality 80% for JPEG/WebP. PNG sta
 
 ## Live results, page insertion and batch stamping
 
-Numbering and watermark tools render the actual generated PDF in thumbnails and the shared viewer before download. Drag the move handle to set a custom position, or use percentage inputs for keyboard placement. Export reuses an exact matching preview result; settings or page changes invalidate it. Generation is debounced, stale jobs are discarded, and preview failures are reported without retaining a stale result.
+Numbering and watermark tools render the actual generated PDF in thumbnails and the shared viewer before download. Choose a position preset or set custom X/Y percentages. There is no drag handle over the page preview. Export reuses an exact matching preview result; settings or page changes invalidate it. Generation is debounced, stale jobs are discarded, and preview failures are reported without retaining a stale result.
 
 Both tools accept multiple PDFs (50 files / 50 MB combined / 500 source pages), share stamp settings, and keep page order, deletion and rotation independently for each document. The document selector switches previews; removal supports Undo. A batch downloads as ZIP, and numbering restarts at the chosen starting number for each document. Batch output is capped at 200 MB and no partial archive is offered on failure.
 
@@ -154,4 +154,13 @@ Merge and Organize PDF expose duplicate, blank A4 page and insert-file actions b
 
 The shared PDF/image viewer offers previous/next pages, arrow-key navigation, zoom, fit and fullscreen (with an expanded-dialog fallback). Rendered previews remain limited to 40 MP. Edited PDF compatibility limits described above still apply.
 
-`tests/editor_workflow_browser.py` verifies insertion order, independent duplicate rotations, blank pages, Undo, viewer navigation/zoom/fullscreen, actual preview pixels and dragged stamp positions in exported PDFs, independent batch edits, numbering restart, watermark ZIP, EN/RU and mobile under production CSP.
+`tests/editor_workflow_browser.py` verifies insertion order, independent duplicate rotations, blank pages, Undo, viewer navigation/zoom/fullscreen, actual preview pixels and coordinate-based stamp positions in exported PDFs, independent batch edits, numbering restart, watermark ZIP, EN/RU and mobile under production CSP.
+
+
+## Languages
+
+English (`/`), Russian (`/ru/`), Ukrainian (`/uk/`), German (`/de/`), Italian (`/it/`), Spanish (`/es/`) and Polish (`/pl/`) cover all 21 tools and the home/About/Contact/Privacy pages: 175 static pages in total. The native-name language menu links to the same tool in every language and works without JavaScript. Internal navigation stays within the chosen language. Production builds generate canonical URLs, seven reciprocal `hreflang` links and `x-default`, and include all routes in the sitemap. Preview builds keep indexing disabled.
+
+`locales/*.json` contain checked-in UI, instruction, metadata and message translations. `scripts/localization.mjs` translates generated English HTML at build time; `i18n.js` uses the matching local dictionary for dynamic controls, statuses and accessible labels. Numbered placeholders preserve page numbers and filenames; document contents, uploaded filenames and user-entered watermarks are not translated. EN/RU retain their existing bilingual source strings. No translation API is used during builds or visits, and no new cookie or third-party script is introduced.
+
+After changing English labels or instructions, update all five dictionaries. Run `npm run build`, `python tests/localization_build.py` and `python tests/localization_browser.py`. The build test checks every localized route, coverage of runtime messages, placeholder consistency, local navigation and SEO links. The browser test runs actual PDF/image exports and checks translated cards, save panels, status messages, language switching and mobile layout under production CSP. `tests/editor_workflow_browser.py` also verifies coordinate-based live stamping after removal of mouse placement.

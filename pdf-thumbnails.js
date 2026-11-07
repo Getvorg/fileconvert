@@ -1,7 +1,7 @@
 // Lazy page previews for split/rotate; file processing remains in pdf-tools.js.
 export class PDFThumbnails {
  constructor(container, options) {
-  this.container=container; this.options=options; this.version=0; this.task=null; this.doc=null; this.cards=[];this.queue=[];this.rendering=false;this.visible=new Set();this.resultDoc=null;this.resultMap=new Map();this.resultVersion=0;window.addEventListener('resize',()=>this.cards.forEach((card,index)=>this.positionStamp(card,index)));
+  this.container=container; this.options=options; this.version=0; this.task=null; this.doc=null; this.cards=[];this.queue=[];this.rendering=false;this.visible=new Set();this.resultDoc=null;this.resultMap=new Map();this.resultVersion=0;
   FileWorkspace.reorder(container,{selector:'li[data-preview-page]',key:card=>Number(card.dataset.previewPage)-1,busy:()=>this.options.busy(),onMove:(from,to)=>this.options.onMove(from,to)});
   this.observer=new IntersectionObserver(entries=>{for(const entry of entries){const index=Number(entry.target.dataset.previewPage)-1;if(entry.isIntersecting){this.visible.add(index);this.enqueue(index);}else{this.visible.delete(index);this.release(this.cards[index]);}}},{rootMargin:'300px'});
  }
@@ -37,11 +37,6 @@ export class PDFThumbnails {
      const button=FileWorkspace.action(kind,`${title}: ${index+1}`,()=>{if(this.options.busy())return;const order=this.options.order(doc.numPages).filter(i=>!this.options.removed(i)),position=order.indexOf(index),target=order[position+direction];if(target!==undefined)this.options.onMove(index,target);});move.append(button);
     }
     const position=document.createElement('span');position.className='page-position';
-    if(this.options.stampPoint){const handle=document.createElement('button');handle.type='button';handle.className='stamp-move-handle';handle.textContent='✥';handle.title=this.options.t('Drag watermark/number','Перетащить знак или номер');handle.setAttribute('aria-label',handle.title);frame.append(handle);let moving=false;
-     handle.addEventListener('pointerdown',event=>{if(this.options.busy())return;event.preventDefault();event.stopPropagation();moving=true;this.options.onStampStart();handle.setPointerCapture(event.pointerId);});
-     handle.addEventListener('pointermove',event=>{if(!moving)return;const img=frame.querySelector('img'),r=img.getBoundingClientRect();if(!r.width||!r.height)return;const x=Math.min(100,Math.max(0,(event.clientX-r.left)/r.width*100)),y=Math.min(100,Math.max(0,(event.clientY-r.top)/r.height*100));this.options.onStampMove(index,x,y);this.positionStamp(card,index);});
-     handle.addEventListener('pointerup',()=>{moving=false;});handle.addEventListener('pointercancel',()=>{moving=false;});frame.querySelector('img').addEventListener('load',()=>this.positionStamp(card,index));
-    }
     card.append(label,actions,frame,position,move);this.cards.push(card);this.container.append(card);this.observer.observe(card);
    }
    this.refresh();
@@ -54,7 +49,6 @@ export class PDFThumbnails {
    checkbox.checked=selected.has(index);checkbox.disabled=this.options.disabled();card.classList.toggle('is-selected',checkbox.checked);
    card.querySelector('[data-action=zoom]').disabled=this.options.busy();card.querySelector('.page-drag').draggable=!this.options.busy();
    card.querySelector('[data-action=rotate]').disabled=this.options.busy();card.querySelector('[data-action=delete]').disabled=this.options.busy()||remaining<=1;
-   this.positionStamp(card,index);
    if(removed){this.visible.delete(index);this.release(card);}else if(this.visible.has(index))this.enqueue(index);
   }
   const desired=this.options.order(count),active=desired.filter(index=>!this.options.removed(index));
@@ -62,7 +56,6 @@ export class PDFThumbnails {
   if(actual.some((id,index)=>id!==desired[index]))desired.forEach(index=>this.container.append(this.cards[index]));
  }
  setResultPreview(doc,map=new Map()){this.resultDoc=doc;this.resultMap=map;this.resultVersion++;this.cards.forEach(card=>this.release(card));this.refresh();document.getElementById('workspace-preview-dialog')?.dispatchEvent(new Event('viewer-refresh'));}
- positionStamp(card,index){const handle=card.querySelector('.stamp-move-handle');if(!handle)return;const img=card.querySelector('img'),frame=card.querySelector('.page-thumbnail');handle.hidden=!this.options.selection(this.cards.length).has(index)||!img.hasAttribute('src')||this.options.removed(index);if(handle.hidden)return;const point=this.options.stampPoint(index),r=img.getBoundingClientRect(),f=frame.getBoundingClientRect();handle.style.left=(r.left-f.left+r.width*point.x)+'px';handle.style.top=(r.top-f.top+r.height*point.y)+'px';handle.disabled=this.options.busy();}
  async previewPage(index){
   const version=this.version;const order=this.options.order(this.cards.length).filter(i=>!this.options.removed(i));
   await FileWorkspace.openPages(order.map(index=>({index,title:this.options.t(`Page ${index+1}`,`Страница ${index+1}`)})),order.indexOf(index),async(entry,canvas,current,cancel,zoom)=>{

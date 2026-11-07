@@ -1,3 +1,4 @@
+import {languages,dictionaries,localePrefix,localizeHtml} from './localization.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {tools, toolNavigation, catalog} from './catalog.mjs';
@@ -12,7 +13,7 @@ const app = fs.readFileSync('app.js','utf8');
 const translations = vm.runInNewContext(app.slice(app.indexOf('const translations ='),app.indexOf('const MAX_SIZE')) + '; translations');
 const template = fs.readFileSync('templates/converter.html','utf8');
 fs.rmSync('dist',{recursive:true,force:true}); fs.mkdirSync('dist');
-for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js','pdf-thumbnails.js','workspace-ui.js','image-lab.js','pdf-extras.js','live-stamp.js']) fs.copyFileSync(file,`dist/${file}`);
+for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js','pdf-thumbnails.js','workspace-ui.js','image-lab.js','pdf-extras.js','live-stamp.js','i18n.js']) fs.copyFileSync(file,`dist/${file}`);
 fs.mkdirSync('dist/vendor');
 fs.copyFileSync('node_modules/fflate/esm/browser.js','dist/vendor/fflate.mjs');
 fs.copyFileSync('node_modules/fflate/LICENSE','dist/vendor/fflate.LICENSE');
@@ -24,24 +25,27 @@ for (const directory of ['cmaps','standard_fonts','wasm','iccs']) fs.cpSync('nod
 fs.copyFileSync('node_modules/pdfjs-dist/LICENSE', 'dist/vendor/pdfjs/LICENSE');
 const licenses = ['pdf-lib/LICENSE.md','@pdf-lib/standard-fonts/LICENSE.md','@pdf-lib/upng/LICENSE','pako/LICENSE','tslib/LICENSE.txt'];
 fs.writeFileSync('dist/vendor/THIRD_PARTY_LICENSES.txt', licenses.map(file => `${file}\n${fs.readFileSync('node_modules/'+file,'utf8')}`).join('\n\n'));
+fs.mkdirSync('dist/locales');
+for(const [code,messages] of Object.entries(dictionaries))fs.writeFileSync(`dist/locales/${code}.js`,`window.FileLocale=${JSON.stringify(messages).replaceAll('<','\\u003c')};`);
 const paths = [];
 const escape = s => s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
-for (const lang of ['en','ru']) {
- const ru = lang === 'ru', prefix = ru ? '/ru/' : '/';
+for (const lang of Object.keys(languages)) {
+ const ru = lang === 'ru', prefix = localePrefix(lang);
  const labels = ru ? ['О проекте','Контакты','Конфиденциальность'] : ['About','Contact','Privacy Policy'];
  const footerNav = `<nav aria-label="${ru?'Информация':'Information'}">${['about','contact','privacy'].map((p,i)=>`<a href="${prefix}${p}/">${labels[i]}</a>`).join('')}</nav>`;
  const nav = toolNavigation(ru,prefix);
  function write(slug,title,description,body,mode='') {
   const path = prefix + (slug ? slug+'/' : ''); paths.push(path);
-  const other = (ru ? '/' : '/ru/') + (slug ? slug+'/' : '');
-  const seo = origin ? `<link rel="canonical" href="${origin}${path}"><link rel="alternate" hreflang="${lang}" href="${origin}${path}"><link rel="alternate" hreflang="${ru?'en':'ru'}" href="${origin}${other}"><meta property="og:url" content="${origin}${path}">` : '<meta name="robots" content="noindex,follow">';
-  const language = `<a class="language-link" href="${other}" lang="${ru?'en':'ru'}">${ru?'English':'Русский'}</a><input type="hidden" id="language" value="${lang}">`;
-  let html = body.replace(/<html lang="en">/,`<html lang="${lang}">`).replace(/<title>.*?<\/title>/,`<title>${title}</title>`).replace(/<meta name="description"[^>]*>/,`<meta name="description" content="${escape(description)}">${seo}<meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:type" content="website"><meta name="color-scheme" content="light">`).replace('href="styles.css"','href="/styles.css"').replace('src="app.js"','src="/app.js"').replace('</head>', '<script src="/catalog.js" defer></script></head>').replace('<body>',`<body data-language="${lang}" data-mode="${mode}" data-page-title="${escape(title)}">`).replace(/<div class="language-control">.*?<\/div>/,language).replace('href="/" class="brand"',`href="${prefix}" class="brand"`).replace('</header>',`</header>${nav}`).replace(/<footer>.*?<\/footer>/s,`<footer>© ${new Date().getFullYear()} FileConvert${footerNav}</footer>`);
+  const localizedPath=code=>localePrefix(code)+(slug?slug+'/':'');
+  const seo = origin ? `<link rel="canonical" href="${origin}${path}">${Object.keys(languages).map(code=>`<link rel="alternate" hreflang="${code}" href="${origin}${localizedPath(code)}">`).join('')}<link rel="alternate" hreflang="x-default" href="${origin}${localizedPath('en')}"><meta property="og:url" content="${origin}${path}">` : '<meta name="robots" content="noindex,follow">';
+  const language = `<details class="language-picker"><summary lang="${lang}">${languages[lang]}</summary><nav aria-label="Language">${Object.entries(languages).map(([code,label])=>`<a href="${localizedPath(code)}" lang="${code}" hreflang="${code}"${code===lang?' aria-current="page"':''}>${label}</a>`).join('')}</nav></details><input type="hidden" id="language" value="${lang}">`;
+  let html = body.replace(/<html lang="en">/,`<html lang="${lang}">`).replace(/<title>.*?<\/title>/,`<title>${title}</title>`).replace(/<meta name="description"[^>]*>/,`<meta name="description" content="${escape(description)}">${seo}<meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:type" content="website"><meta name="color-scheme" content="light">`).replace('href="styles.css"','href="/styles.css"').replace('src="app.js"','src="/app.js"').replace('<script src="/workspace-ui.js"',`${dictionaries[lang]?`<script src="/locales/${lang}.js" defer></script>`:''}<script src="/i18n.js" defer></script><script src="/workspace-ui.js"`).replace('</head>','<script src="/catalog.js" defer></script></head>').replace('<body>',`<body data-language="${lang}" data-mode="${mode}" data-page-title="${escape(title)}">`).replace(/<div class="language-control">.*?<\/div>/,language).replace('href="/" class="brand"',`href="${prefix}" class="brand"`).replace('</header>',`</header>${nav}`).replace(/<footer>.*?<\/footer>/s,`<footer>© ${new Date().getFullYear()} FileConvert${footerNav}</footer>`);
   if(mode) {
    html=html.replace(/data-i18n="title"/,'').replace(/<h1[^>]*>.*?<\/h1>/,`<h1>${title.replace(' | FileConvert','')}</h1>`);
    html=html.replace(/<button class="mode-tab[^>]*data-mode="(.*?)"[^>]*>(.*?)<\/button>/g,(_,m,text)=>`<a class="mode-tab${m===mode?' active':''}" href="${prefix}${m==='jpg-png'?'jpg-to-png':'png-to-jpg'}/">${text}</a>`);
   }
-  html=html.replace(/(<[a-z0-9]+[^>]*data-i18n="([^"]+)"[^>]*>)([^<]*)(<\/[^>]+>)/g,(_,a,k,b,c)=>a+(translations[lang][k]||b)+c);
+  html=html.replace(/(<[a-z0-9]+[^>]*data-i18n="([^"]+)"[^>]*>)([^<]*)(<\/[^>]+>)/g,(_,a,k,b,c)=>a+(translations[ru?'ru':'en'][k]||b)+c);
+  html=localizeHtml(html,lang);
   const dir = 'dist'+path; fs.mkdirSync(dir,{recursive:true}); fs.writeFileSync(dir+'index.html',html);
  }
  for(const slug of ['jpg-to-png','png-to-jpg']) {

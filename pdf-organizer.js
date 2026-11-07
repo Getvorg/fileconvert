@@ -1,8 +1,7 @@
 import * as pdfjs from '/vendor/pdfjs/pdf.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.mjs';
-const ru = document.documentElement.lang === 'ru';
-const t = (en, r) => ru ? r : en;
+const t = (en, r) => FileI18n.t(en,r);
 const get = id => document.getElementById(id);
 const input = get('editor-file'), feedback = get('editor-feedback');
 const workspace = get('editor-workspace'), grid = get('editor-pages');

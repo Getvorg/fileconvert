@@ -1,4 +1,4 @@
-"""Live stamps, drag placement, per-document batch edits and editor insertion."""
+"""Live stamps, coordinate placement, per-document batch edits and editor insertion."""
 import io,zipfile,base64,tomllib
 from pathlib import Path
 import fitz
@@ -47,9 +47,8 @@ with sync_playwright() as p:
    page.locator('#page-preview-close').click();expect(page.locator('#page-preview-dialog')).not_to_be_visible()
   page.goto(BASE+prefix+'number-pdf/');page.locator('#pdf-files').set_input_files([upload('first.pdf',pdf()),upload('second.pdf',pdf(('SECOND',)))]);expect(page.locator('[data-preview-page]')).to_have_count(2)
   page.locator('#number-start').fill('7');page.locator('#stamp-color').evaluate('(e)=>{e.value="#00ff00";e.dispatchEvent(new Event("input",{bubbles:true}));}');live_ready()
-  first=page.locator('[data-preview-page="1"]');first.scroll_into_view_if_needed();handle=first.locator('.stamp-move-handle');expect(handle).to_be_visible()
-  bounds=first.locator('img').bounding_box();target=(bounds['x']+bounds['width']*.25,bounds['y']+bounds['height']*.35);start=handle.bounding_box();page.mouse.move(start['x']+start['width']/2,start['y']+start['height']/2);page.mouse.down();page.mouse.move(*target,steps=6);page.mouse.up();live_ready()
-  expect(page.locator('#stamp-position')).to_have_value('custom');assert abs(float(page.locator('#stamp-x').input_value())-25)<2 and abs(float(page.locator('#stamp-y').input_value())-35)<2
+  first=page.locator('[data-preview-page="1"]');expect(page.locator('.stamp-move-handle')).to_have_count(0)
+  page.locator('#stamp-position').select_option('custom');page.locator('#stamp-x').fill('25');page.locator('#stamp-y').fill('35');live_ready()
   expect(first.locator('img')).to_have_attribute('data-angle','0');page.wait_for_function('()=>{const i=document.querySelector("[data-preview-page=\\"1\\"] img");return i.complete&&i.naturalWidth>0}')
   encoded=first.locator('img').evaluate('i=>{const c=document.createElement("canvas");c.width=i.naturalWidth;c.height=i.naturalHeight;c.getContext("2d").drawImage(i,0,0);return c.toDataURL().split(",")[1]}')
   preview=Image.open(io.BytesIO(base64.b64decode(encoded))).convert('RGB');points=[(x,y) for y in range(preview.height) for x in range(preview.width) if preview.getpixel((x,y))[1]>150 and preview.getpixel((x,y))[0]<100 and preview.getpixel((x,y))[2]<100]
@@ -72,4 +71,4 @@ with sync_playwright() as p:
  assert not errors,errors
  assert not external,external
  b.close()
-print('PASS: insertion/duplicate/blank/independent rotations/undo, viewer navigation/zoom/fullscreen, live stamp pixels/drag and saved positions, per-document batch edits, numbering restart and watermark ZIP, EN/RU/mobile')
+print('PASS: insertion/duplicate/blank/independent rotations/undo, viewer navigation/zoom/fullscreen, live stamp pixels/coordinates and saved positions, per-document batch edits, numbering restart and watermark ZIP, EN/RU/mobile')

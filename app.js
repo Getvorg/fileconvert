@@ -5,7 +5,7 @@ const translations = {
 };
 const MAX_SIZE = 20 * 1024 * 1024;
 let mode = 'jpg-png';
-let lang = document.body.dataset.language === 'ru' ? 'ru' : 'en';
+let lang = document.body.dataset.language || 'en';
 let selectionVersion = 0;
 let currentFile = null;
 let imageRotation = 0;
@@ -28,7 +28,7 @@ function openModal() {
   el('modalDownload').focus();
 }
 const el = id => document.getElementById(id);
-const t = key => translations[lang][key];
+const t = key => FileI18n.t(translations.en[key],translations.ru[key]);
 const savePanel=FileWorkspace.savePanel({root:document.querySelector('.converter'),button:el('convert'),results:el('download'),name:document.body.dataset.mode==='png-jpg'?'image.jpg':'image.png'});
 const edits=FileWorkspace.history();
 const undo=FileWorkspace.undoRow(el('file'),()=>{
@@ -38,9 +38,9 @@ const undo=FileWorkspace.undoRow(el('file'),()=>{
 });
 let lastBackground=el('background').value;
 function remember(background=lastBackground){edits.push({files:currentFile?[currentFile]:[],rotation:imageRotation,background});undo.update(edits.length);}
-FileWorkspace.decorate(el('rotateImage'),'rotate',lang==='ru'?'Повернуть на 90°':'Rotate 90°');el('rotateImage').removeAttribute('data-i18n');
-FileWorkspace.decorate(el('remove'),'delete',lang==='ru'?'Удалить изображение':'Delete image');
-const zoomImage=FileWorkspace.action('zoom',lang==='ru'?'Просмотр изображения':'Preview image',()=>{if(previewUrl)void FileWorkspace.openImage(previewUrl,currentFile.name,imageRotation);});zoomImage.id='zoomImage';
+FileWorkspace.decorate(el('rotateImage'),'rotate',FileI18n.t('Rotate 90°','Повернуть на 90°'));el('rotateImage').removeAttribute('data-i18n');
+FileWorkspace.decorate(el('remove'),'delete',FileI18n.t('Delete image','Удалить изображение'));
+const zoomImage=FileWorkspace.action('zoom',FileI18n.t('Preview image','Просмотр изображения'),()=>{if(previewUrl)void FileWorkspace.openImage(previewUrl,currentFile.name,imageRotation);});zoomImage.id='zoomImage';
 const imageActions=document.createElement('div');imageActions.className='page-overlay';imageActions.append(zoomImage,el('rotateImage'),el('remove'));el('fileDetails').append(imageActions);el('fileDetails').classList.add('page-card');
 
 function setLanguage(next) {
@@ -90,13 +90,13 @@ function selectFile(file,{restore=false,rotation=0}={}) {
 function convert() {
   if (!currentFile || !previewUrl) return;
   clearOutput(); const file = currentFile; const src = previewUrl; const selectedMode = mode;const selectedVersion=selectionVersion;const rotation=imageRotation;
-  savePanel.begin(lang==='ru'?'Чтение изображения…':'Reading image…');
+  savePanel.begin(FileI18n.t('Reading image…','Чтение изображения…'));
   el('convert').disabled = true; el('convert').textContent = t('working');
   const image = new Image();
   image.onload = () => {
     if(selectedVersion!==selectionVersion)return;
     try {
-      savePanel.wait(lang==='ru'?'Поворот и конвертация…':'Rotating and converting…');
+      savePanel.wait(FileI18n.t('Rotating and converting…','Поворот и конвертация…'));
       const canvas = document.createElement('canvas');
       canvas.width = rotation%180 ? image.naturalHeight : image.naturalWidth; canvas.height = rotation%180 ? image.naturalWidth : image.naturalHeight;
       if (!canvas.width || !canvas.height || canvas.width * canvas.height > 40000000) throw Error('Empty image');

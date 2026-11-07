@@ -1,6 +1,6 @@
 'use strict';
 (() => {
- const ru=document.documentElement.lang==='ru',t=(en,r)=>ru?r:en;
+ const t=(en,r)=>FileI18n.t(en,r);
  const icons={zoom:'M21 21l-5-5M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z',rotate:'M20 10a8 8 0 1 1-2.3-5.7M20 3v6h-6',delete:'M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7M14 10v7',previous:'M15 5l-7 7 7 7',next:'M9 5l7 7-7 7',duplicate:'M9 9h12v12H9zM3 15V3h12',blank:'M6 2h9l4 4v16H6zM12 11v7M9 14h6',insert:'M12 3v18M3 12h18',undo:'M9 4L3 10l6 6M3 10h10a7 7 0 0 1 7 7'};
  function action(kind,label,click){
   const button=document.createElement('button');button.type='button';button.className='workspace-action';button.dataset.action=kind;button.setAttribute('aria-label',label);button.title=label;button.dataset.tooltip=label;

@@ -5,7 +5,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
 (() => {
  const root=document.querySelector('[data-pdf-tool]');
  if (!root) return;
- const ru=document.documentElement.lang==='ru', tr=(en,r)=>ru?r:en;
+ const tr=(en,r)=>FileI18n.t(en,r);
  const tool=root.dataset.pdfTool, png=tool==='png-to-pdf',raster=tool==='pdf-to-jpg'||tool==='pdf-to-png',jpg=tool==='jpg-to-pdf'||png, merge=tool==='merge-pdf', split=tool==='split-pdf';
  const stamps=tool==='number-pdf'||tool==='watermark-pdf';
  const extra=['number-pdf','watermark-pdf','extract-images','compress-pdf'].includes(tool);
@@ -39,8 +39,6 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   disabled:()=>busy||tool==='compress-pdf'||(split&&get('split-mode').value==='each'),
   order:count=>orderFor(count),onReady:count=>{if(pageOrder.length!==count)pageOrder=Array.from({length:count},(_,i)=>i);live?.request();},
   onMove:(from,to)=>{if(busy)return;remember();const order=[...orderFor(previews.cards.length)],a=order.indexOf(from),b=order.indexOf(to);order.splice(b,0,...order.splice(a,1));pageOrder=order;if((raster||(split&&get('split-mode').value==='range'))&&get('page-range').value.trim()){const selected=selectedPages(previews.cards.length);get('page-range').value=pageOrder.filter(i=>selected.has(i)).map(i=>i+1).join(',');}invalidate();previews.refresh();},
-  stampPoint:stamps?index=>live?.point(index)||{x:.5,y:.5}:null,
-  onStampStart:()=>remember(),onStampMove:(index,x,y)=>{get('stamp-position').value='custom';get('stamp-x').value=x.toFixed(2);get('stamp-y').value=y.toFixed(2);invalidate();},
   busy:()=>busy,removed:index=>removedPages.has(index),
   angle:(index,count)=>(turn(index)+(tool==='rotate-pdf'&&selectedPages(count).has(index)?Number(get('rotation').value):0))%360,
   onRotate:index=>{remember();pageTurns.set(index,(turn(index)+90)%360);invalidate();},
