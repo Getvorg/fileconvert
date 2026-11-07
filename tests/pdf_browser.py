@@ -45,16 +45,16 @@ with sync_playwright() as p:
         with page.expect_download() as info: link.click()
         return Path(info.value.path()).read_bytes()
     for ru in [False,True]:
-        for slug in ['', 'jpg-to-png','png-to-jpg','merge-pdf','split-pdf','rotate-pdf','jpg-to-pdf','about','contact','privacy']:
+        for slug in ['', 'jpg-to-png','png-to-jpg','merge-pdf','split-pdf','rotate-pdf','jpg-to-pdf','organize-pdf','about','contact','privacy']:
             visit(slug,ru)
             assert page.locator('.tool-navigation').count()==1
             assert page.locator('html').get_attribute('lang')==('ru' if ru else 'en')
     visit('',True)
-    assert page.locator('.tool-card:visible').count()==6
+    assert page.locator('.tool-card:visible').count()==7
     page.locator('[data-filter=organize]').click()
-    assert page.locator('.tool-card:visible').count()==2
+    assert page.locator('.tool-card:visible').count()==3
     page.locator('[data-filter=all]').click()
-    assert page.locator('.tool-card:visible').count()==6
+    assert page.locator('.tool-card:visible').count()==7
     page.locator('.nav-group summary').first.click()
     expect(page.locator('.nav-menu').first).to_be_visible()
     page.keyboard.press('Escape')
@@ -134,9 +134,9 @@ with sync_playwright() as p:
     visit('',True)
     page.locator('.nav-group summary').first.click()
     page.locator('.nav-menu a').first.click()
-    assert page.url.endswith('/ru/merge-pdf/')
+    assert page.url.endswith('/ru/organize-pdf/')
     visit('',True);page.screenshot(path='work/catalog-mobile.png',full_page=True)
     assert not errors,errors
     assert not external,external
     browser.close()
-print('PASS: 20 routes, catalog filters/menu, merge order, split/ranges, relative rotations, JPG/A4, encrypted/damaged rejection, drops, mobile, no external requests')
+print('PASS: 22 routes, catalog filters/menu, merge order, split/ranges, relative rotations, JPG/A4, encrypted/damaged rejection, drops, mobile, no external requests')

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {tools, toolNavigation, catalog} from './catalog.mjs';
 import {pdfPage} from './pdf-page.mjs';
+import {organizePage} from './organize-page.mjs';
 const origin = process.env.SITE_URL?.replace(/\/$/, '') || '';
 if (origin && (!/^https:\/\//.test(origin) || new URL(origin).pathname !== '/')) throw Error('SITE_URL must be an HTTPS origin without a path');
 const email = process.env.CONTACT_EMAIL || '';
@@ -10,10 +11,14 @@ const app = fs.readFileSync('app.js','utf8');
 const translations = vm.runInNewContext(app.slice(app.indexOf('const translations ='),app.indexOf('const MAX_SIZE')) + '; translations');
 const template = fs.readFileSync('templates/converter.html','utf8');
 fs.rmSync('dist',{recursive:true,force:true}); fs.mkdirSync('dist');
-for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js']) fs.copyFileSync(file,`dist/${file}`);
+for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js']) fs.copyFileSync(file,`dist/${file}`);
 fs.mkdirSync('dist/vendor');
 fs.copyFileSync('node_modules/pdf-lib/dist/pdf-lib.min.js', 'dist/vendor/pdf-lib.min.js');
 fs.copyFileSync('node_modules/pdf-lib/LICENSE.md', 'dist/vendor/pdf-lib.LICENSE.md');
+fs.mkdirSync('dist/vendor/pdfjs');
+for (const name of ['pdf', 'pdf.worker', 'pdf.renderer']) fs.copyFileSync(`node_modules/pdfjs-dist/build/${name}.min.mjs`, `dist/vendor/pdfjs/${name}.mjs`);
+for (const directory of ['cmaps','standard_fonts','wasm','iccs']) fs.cpSync('node_modules/pdfjs-dist/'+directory, 'dist/vendor/pdfjs/'+directory, {recursive:true});
+fs.copyFileSync('node_modules/pdfjs-dist/LICENSE', 'dist/vendor/pdfjs/LICENSE');
 const licenses = ['pdf-lib/LICENSE.md','@pdf-lib/standard-fonts/LICENSE.md','@pdf-lib/upng/LICENSE','pako/LICENSE','tslib/LICENSE.txt'];
 fs.writeFileSync('dist/vendor/THIRD_PARTY_LICENSES.txt', licenses.map(file => `${file}\n${fs.readFileSync('node_modules/'+file,'utf8')}`).join('\n\n'));
 const paths = [];
@@ -48,11 +53,13 @@ for (const lang of ['en','ru']) {
   return template.replace(/<main>[\s\S]*?<\/main>/,main).replace(/  <div id="successModal"[\s\S]*?<footer>/,'  <footer>').replace('  <script src="app.js" defer></script>',`  ${scripts}`);
  }
  write('',ru?'Инструменты PDF и изображений онлайн | FileConvert':'Free PDF and Image Tools Online | FileConvert',ru?'Объединение, разделение и поворот PDF, JPG в PDF и конвертация изображений. Бесплатно в браузере.':'Merge, split and rotate PDFs, convert JPG to PDF and convert images. Free tools that process files in your browser.',pageShell(catalog(ru,prefix)));
- for(const tool of tools.filter(t=>!['jpg-to-png','png-to-jpg'].includes(t.slug))) {
+ for(const tool of tools.filter(t=>!['jpg-to-png','png-to-jpg','organize-pdf'].includes(t.slug))) {
   write(tool.slug,`${tool.name[Number(ru)]} ${ru?'онлайн бесплатно':'Online Free'} | FileConvert`,tool.description[Number(ru)],pageShell(pdfPage(tool,ru),'<script src="/vendor/pdf-lib.min.js" defer></script><script src="/pdf-tools.js" defer></script>'));
  }
+ const organizer = tools.find(tool=>tool.slug==='organize-pdf');
+ write(organizer.slug,`${organizer.name[Number(ru)]} ${ru?'онлайн бесплатно':'Online Free'} | FileConvert`,organizer.description[Number(ru)],pageShell(organizePage(ru),'<script src="/vendor/pdf-lib.min.js" defer></script><script src="/pdf-organizer.js" type="module"></script>'));
  const content={
- about:ru?'<h1>О FileConvert</h1><p>FileConvert — бесплатный инструмент для работы с PDF и изображениями в браузере. Регистрация не требуется.</p><h2>Как это работает</h2><p>Файлы открываются и обрабатываются локально средствами браузера и библиотекой pdf-lib. Мы не получаем содержимое выбранных файлов.</p><h2>Доступные инструменты</h2><p>Доступны JPG → PNG, PNG → JPG, JPG → PDF, объединение, разделение и поворот PDF. Все инструменты работают в браузере.</p>':'<h1>About FileConvert</h1><p>FileConvert is a free browser tool for working with PDFs and images without an account.</p><h2>How it works</h2><p>Your browser opens and processes files locally using browser APIs and pdf-lib. We do not receive selected file contents.</p><h2>Available tools</h2><p>JPG → PNG, PNG → JPG, JPG → PDF, PDF merge, split and rotation are available. All tools work in your browser.</p>',
+ about:ru?'<h1>О FileConvert</h1><p>FileConvert — бесплатный инструмент для работы с PDF и изображениями в браузере. Регистрация не требуется.</p><h2>Как это работает</h2><p>Файлы открываются и обрабатываются локально в вашем браузере. Мы не получаем содержимое выбранных файлов.</p><h2>Доступные инструменты</h2><p>Доступны JPG → PNG, PNG → JPG, JPG → PDF, объединение, разделение и поворот PDF, визуальное удаление и перестановка страниц. Все инструменты работают в браузере.</p>':'<h1>About FileConvert</h1><p>FileConvert is a free browser tool for working with PDFs and images without an account.</p><h2>How it works</h2><p>Your browser opens and processes files locally on your device. We do not receive selected file contents.</p><h2>Available tools</h2><p>JPG → PNG, PNG → JPG, JPG → PDF, PDF merge, split, rotation and visual page organization are available. All tools work in your browser.</p>',
  contact:`<h1>${labels[1]}</h1><p>${ru?'Сообщите об ошибке или предложите улучшение. Укажите браузер, устройство и шаги воспроизведения. Не отправляйте личные документы и конфиденциальные изображения.':'Report a bug or suggest an improvement. Include your browser, device and steps to reproduce. Do not send personal documents or confidential images.'}</p>${email?`<p><a href="mailto:${email}">${email}</a></p>`:`<p><a href="https://github.com/Getvorg/fileconvert/issues">${ru?'Создать публичное обращение на GitHub':'Open a public issue on GitHub'}</a></p><p>${ru?'Обращения видны всем; для отправки нужен аккаунт GitHub.':'Issues are public and require a GitHub account to submit.'}</p>`}`,
  privacy:ru?'<h1>Политика конфиденциальности</h1><p>Обновлено: 7 ноября 2026 года.</p><h2>Ваши файлы</h2><p>Конвертация выполняется на устройстве. Изображения и PDF не отправляются на сервер. Временные данные находятся в памяти вкладки; скачанные файлы остаются у вас.</p><h2>Данные посещения</h2><p>Хостинг может обрабатывать IP-адрес, адрес страницы, сведения о браузере и время запроса в технических журналах. Конкретный провайдер и сроки хранения будут указаны после выбора хостинга.</p><h2>Cookies и реклама</h2><p>В текущей версии нет рекламы, аналитики и рекламных cookies. Выбор языка определяется адресом страницы. Перед подключением рекламы политика будет обновлена, а для регионов, где это требуется, будет настроено согласие до загрузки рекламных технологий.</p><h2>Обращения</h2><p>Используйте страницу контактов для вопросов и запросов о данных. Публичные обращения GitHub обрабатываются также по правилам GitHub.</p>':'<h1>Privacy Policy</h1><p>Updated: November 7, 2026.</p><h2>Your files</h2><p>Conversion takes place on your device. Images and PDFs are not uploaded. Temporary image data stays in tab memory; downloaded files remain on your device.</p><h2>Visit data</h2><p>The hosting provider may process IP addresses, requested URLs, browser details and request times in operational logs. The provider and retention details will be added after hosting is selected.</p><h2>Cookies and advertising</h2><p>This version has no ads, analytics or advertising cookies. Language is determined by the page URL. Before advertising is enabled, this policy will be updated and consent will be configured before loading advertising technologies where required.</p><h2>Contact and requests</h2><p>Use the contact page for privacy questions and data requests. Public GitHub issues are also subject to GitHub’s privacy practices.</p>'
  };

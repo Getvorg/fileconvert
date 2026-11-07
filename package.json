@@ -6,12 +6,13 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "start": "python server.py",
-    "check": "node --check app.js && node --check catalog.js && node --check pdf-tools.js && node --check scripts/build.mjs && node --check scripts/catalog.mjs && node --check scripts/pdf-page.mjs"
+    "check": "node --check app.js && node --check catalog.js && node --check pdf-tools.js && node --check scripts/build.mjs && node --check scripts/catalog.mjs && node --check scripts/pdf-page.mjs && node --check pdf-organizer.js && node --check scripts/organize-page.mjs"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13.0"
   },
   "dependencies": {
-    "pdf-lib": "1.17.1"
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.5.438"
   }
 }
