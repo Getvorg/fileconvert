@@ -26,6 +26,7 @@ python tests/mixed_merge_browser.py
 python tests/preview_stage_browser.py
 python tests/page_actions_zip_browser.py
 python tests/workspace_polish_browser.py
+python tests/new_conversion_tools_browser.py
 ```
 
 Browser checks require the local server, use `/usr/bin/chromium`, and save a screenshot in `work/`.
@@ -55,8 +56,8 @@ To build elsewhere, provide the same variables and upload only `dist/`. Configur
 1. **Delivered:** distinct JPG → PNG / PNG → JPG pages, EN/RU URLs, instructions, About, Contact, Privacy, production SEO generation and static hosting configuration.
 2. **Delivered:** filterable tool cards, grouped top navigation, JPG → PDF with original/A4 pages, visual PDF merge with page reordering, split/extraction with inclusive page ranges or one file per page, relative clockwise PDF rotation. PDF processing uses locally bundled pdf-lib 1.17.1 (MIT license copied to `/vendor/pdf-lib.LICENSE.md`). Add tools in `scripts/catalog.mjs` to extend the directory and navigation.
 3. **Delivered:** visual PDF page organizer (`/organize-pdf/`, `/ru/organize-pdf/`), lazy thumbnails, drag reorder, keyboard/mobile position controls, individual and bulk deletion/rotation, 30-step undo and reset. Links are available from existing PDF tools.
-4. **Next:** PNG → PDF.
-5. **Then:** PDF → images, image extraction, watermarks and page numbers, with browser integration tests.
+4. **Delivered:** PNG → PDF, PDF → JPG/PNG ZIP export, JPG/PNG/WebP image compression and resizing.
+5. **Next:** embedded image extraction, watermarks and page numbers, with browser integration tests.
 6. **Separate evaluation:** compression, OCR, Office ↔ PDF, PDF/A, repair, redaction, signatures and forms. Some need backend services, font/rendering infrastructure or careful security validation. Visual overlays must never be described as secure redaction; adding a signature image is not a cryptographic signature.
 
 The screenshot is a long-term tool catalog, not a list of currently supported features. No nonworking PDF buttons are shown.
@@ -91,11 +92,11 @@ No external conversion service or new decoder dependency is used. Formats not de
 
 ## Upload-to-preview state
 
-All seven tool pages now replace their large upload prompt with previews after selection. Native file inputs stay visually hidden; accessible upload labels and compact Add/Replace controls open the picker. Merge/organize retain their shared visual page editor. JPG → PDF displays image cards with existing ordering/removal actions. JPG/PNG converters use a full image preview with replace/remove controls. Removing the last file restores the initial upload state.
+All tool pages now replace their large upload prompt with previews after selection. Native file inputs stay visually hidden; accessible upload labels and compact Add/Replace controls open the picker. Merge/organize retain their shared visual page editor. JPG → PDF displays image cards with existing ordering/removal actions. JPG/PNG converters use a full image preview with replace/remove controls. Removing the last file restores the initial upload state.
 
 Split and rotate use `pdf-thumbnails.js`, which renders selected PDFs lazily with PDF.js and releases offscreen blob URLs. Checkbox selection and the page-range input stay synchronized. An empty range means all pages; at least one checkbox remains selected. Split-every-page disables subset selection. Rotate previews include the original page rotation plus the selected output angle, matching the saved PDF. Replacing/removing the PDF destroys the previous preview document; preview failures do not bypass conversion validation.
 
-`tests/preview_stage_browser.py` exercises all seven tools in both languages: upload/previews occupying the same stage, restoration/replacement, painted thumbnails, visual range selection, rotation/output agreement and mobile overflow.
+`tests/preview_stage_browser.py` exercises all tools in both languages: upload/previews occupying the same stage, restoration/replacement, painted thumbnails, visual range selection, rotation/output agreement and mobile overflow.
 
 ## Per-card actions and split ZIP
 
@@ -109,7 +110,7 @@ Document options (page range, bulk rotation, split output mode, JPG page size) n
 
 ## Shared cards, undo and save panel
 
-`workspace-ui.js` supplies the same SVG preview/rotate/delete actions and tooltips across all seven tools, image/PDF preview dialogs, reorder handles, history helpers and the result panel. The panel sits beside the workspace above 900px, follows the page while scrolling, and moves below the workspace on smaller screens. Users can set an output filename; names are sanitized and the correct output extension is kept. Renaming an already generated result updates download attributes without regenerating file data. Exact output size is shown after processing, never estimated.
+`workspace-ui.js` supplies the same SVG preview/rotate/delete actions and tooltips across all tools, image/PDF preview dialogs, reorder handles, history helpers and the result panel. The panel sits beside the workspace above 900px, follows the page while scrolling, and moves below the workspace on smaller screens. Users can set an output filename; names are sanitized and the correct output extension is kept. Renaming an already generated result updates download attributes without regenerating file data. Exact output size is shown after processing, never estimated.
 
 Progress is measured when page/image counts are available (ZIP generation, image-to-PDF pages and copied source pages); reading, encoding and final PDF/ZIP serialization use an indeterminate indicator. No timer simulates progress. ZIP loops yield to the browser between batches. Editing/undo invalidates previous download links and size metadata.
 
@@ -118,3 +119,13 @@ Split/rotate/JPG-to-PDF and image converters now have Undo controls; merge/organ
 Reordering supports native mouse drag, touch-pointer handles, and arrow buttons. PDF source page indices stay stable while visual/output order changes. ZIP entry names retain original page numbers, and entries follow the chosen page order. JPEG pages remain encoded JPEG data; PDF page rotations are applied after embedding. PNG/JPG converters apply rotations to exported pixels.
 
 `tests/workspace_polish_browser.py` checks Undo after deletion and rotation, reorder/Undo, all preview buttons, custom names, exact byte sizes, measured ZIP progress, independently parsed PDF/image/ZIP output, both languages, desktop/mobile layout and real browser touch events. Existing conversion, PDF and preview suites remain part of verification.
+
+## PDF images and image optimization
+
+The catalog now contains 12 tools (32 EN/RU pages including home and information pages). `png-to-pdf` reuses the image/PDF workspace, embeds PNG alpha, supports original/A4 pages, turns, ordering and Undo. Original-size PDF pages preserve image proportions and are scaled down if a side exceeds 14,400 PDF points. PNG dimensions are checked before embedding. `pdf-to-jpg` and `pdf-to-png` render selected pages with the existing local PDF.js worker and package images in one ZIP. Resolution choices are 72/144/216 DPI (144 default); JPG quality is 90%, PNG is lossless, page background white. This renders complete pages rather than extracting embedded images. Exports respect rotations, deletions and ordering; limit 100 selected pages, 40 MP per output image, 200 MB combined image data. Source PDF limits remain 50 MB / 500 pages.
+
+`image-lab.js` powers `compress-image` and `resize-image`, supporting JPG, PNG and WebP, shared card actions, order, Undo, save metadata and real progress. One result downloads directly; batches use ZIP with stable ASCII names. Input limits are 50 images, 20 MB each / 50 MB total and 40 MP per image. Output is limited to 40 MP, 16,384 pixels per side and 200 MB image data per job. No new dependencies or external conversion services were added.
+
+Compression defaults to the source format and quality 80% for JPEG/WebP. PNG stays lossless. If same-format compression without rotation would increase size, the original is retained. Resizing offers aspect-preserving fit or exact dimensions, with enlargement off by default; quality defaults to 92%. PNG/WebP preserve alpha; JPEG uses a chosen background. The workspace reports input/output image bytes and actual reduction or growth, while the save panel reports actual download size (including ZIP overhead). SVG/HEIC/TIFF are not supported by these two image tools; mixed-file merge retains its wider browser-dependent import behavior.
+
+`tests/new_conversion_tools_browser.py` independently inspects PDF/ZIP/image outputs: raster DPI, colors, sizes, page turns/removals, PNG transparency in PDF, A4, noisy-JPEG reduction, alpha-preserving batches, exact/proportional resize, rotated dimensions, WebP, Undo/errors, EN/RU routes, catalog and mobile overflow.

@@ -52,11 +52,11 @@ with sync_playwright() as p:
             assert page.locator('.tool-navigation').count()==1
             assert page.locator('html').get_attribute('lang')==('ru' if ru else 'en')
     visit('',True)
-    assert page.locator('.tool-card:visible').count()==7
+    assert page.locator('.tool-card:visible').count()==12
     page.locator('[data-filter=organize]').click()
     assert page.locator('.tool-card:visible').count()==3
     page.locator('[data-filter=all]').click()
-    assert page.locator('.tool-card:visible').count()==7
+    assert page.locator('.tool-card:visible').count()==12
     page.locator('.nav-group summary').first.click()
     expect(page.locator('.nav-menu').first).to_be_visible()
     page.keyboard.press('Escape')

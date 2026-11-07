@@ -5,24 +5,24 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  const root=document.querySelector('[data-pdf-tool]');
  if (!root) return;
  const ru=document.documentElement.lang==='ru', tr=(en,r)=>ru?r:en;
- const tool=root.dataset.pdfTool, jpg=tool==='jpg-to-pdf', merge=tool==='merge-pdf', split=tool==='split-pdf';
+ const tool=root.dataset.pdfTool, png=tool==='png-to-pdf',raster=tool==='pdf-to-jpg'||tool==='pdf-to-png',jpg=tool==='jpg-to-pdf'||png, merge=tool==='merge-pdf', split=tool==='split-pdf';
  const get=id=>document.getElementById(id);
  const input=get('pdf-files'), run=get('pdf-run'), list=get('pdf-file-list'), feedback=get('pdf-feedback'), results=get('pdf-results');
  const MAX_TOTAL=50*1024*1024;
  let files=[], urls=[], busy=false, previewFile=null, pageOrder=[];
- const savePanel=FileWorkspace.savePanel({root,button:run,results,name:jpg?'images.pdf':split?'document-pages.zip':'document-rotated.pdf'});
+ const savePanel=FileWorkspace.savePanel({root,button:run,results,name:jpg?'images.pdf':raster?'document-images.zip':split?'document-pages.zip':'document-rotated.pdf'});
  const edits=FileWorkspace.history();let lastSettings={};
- const settings=()=>Object.fromEntries(['page-size','page-range','rotation','split-mode'].map(id=>[id,get(id)?.value]).filter(([,value])=>value!==undefined));
+ const settings=()=>Object.fromEntries(['page-size','page-range','rotation','split-mode','render-dpi'].map(id=>[id,get(id)?.value]).filter(([,value])=>value!==undefined));
  const undo=FileWorkspace.undoRow(get('pdf-stage-controls'),()=>{
   if(busy||!edits.length)return;const state=edits.pop();files=[...state.files];
-  if(previews&&files[0]!==previewFile){previewFile=files[0];void previews.setFile(previewFile);}
+  if(previews&&files[0]!==previewFile){previewFile=files[0];previews.ready=previews.setFile(previewFile);}
   imageTurns.clear();state.imageTurns.forEach(([f,a])=>imageTurns.set(f,a));pageTurns.clear();state.pageTurns.forEach(([i,a])=>pageTurns.set(i,a));removedPages.clear();state.removed.forEach(i=>removedPages.add(i));pageOrder=[...state.order];
   Object.entries(state.settings).forEach(([id,value])=>{if(get(id))get(id).value=value;});
   if(split)get('range-settings').hidden=get('split-mode').value==='each';invalidate();render();
  });
  function snapshot(){return {files:[...files],imageTurns:[...imageTurns],pageTurns:[...pageTurns],removed:[...removedPages],order:[...pageOrder],settings:settings()};}
  function remember(previous){const state=snapshot();if(previous)state.settings={...previous};edits.push(state);undo.update(edits.length,busy);}
- function defaultName(){const base=files[0]?.name.replace(/\.[^.]+$/,'')||'document';return jpg?'images.pdf':split?(get('split-mode').value==='each'?base+'-pages.zip':base+'-extracted.pdf'):base+'-rotated.pdf';}
+ function defaultName(){const base=files[0]?.name.replace(/\.[^.]+$/,'')||'document';return jpg?'images.pdf':raster?base+'-images.zip':split?(get('split-mode').value==='each'?base+'-pages.zip':base+'-extracted.pdf'):base+'-rotated.pdf';}
  const imageUrls=new Map(), imageTurns=new Map(), pageTurns=new Map(), removedPages=new Set();
  const turn=index=>pageTurns.get(index)||0;
  const orderFor=count=>pageOrder.length===count?pageOrder:Array.from({length:count},(_,i)=>i);
@@ -33,7 +33,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   selection:count=>split&&get('split-mode').value==='each'?new Set(remaining(count)):selectedPages(count),
   disabled:()=>busy||(split&&get('split-mode').value==='each'),
   order:count=>orderFor(count),onReady:count=>{if(pageOrder.length!==count)pageOrder=Array.from({length:count},(_,i)=>i);},
-  onMove:(from,to)=>{if(busy)return;remember();const order=[...orderFor(previews.cards.length)],a=order.indexOf(from),b=order.indexOf(to);order.splice(b,0,...order.splice(a,1));pageOrder=order;if(split&&get('split-mode').value==='range'&&get('page-range').value.trim()){const selected=selectedPages(previews.cards.length);get('page-range').value=pageOrder.filter(i=>selected.has(i)).map(i=>i+1).join(',');}invalidate();previews.refresh();},
+  onMove:(from,to)=>{if(busy)return;remember();const order=[...orderFor(previews.cards.length)],a=order.indexOf(from),b=order.indexOf(to);order.splice(b,0,...order.splice(a,1));pageOrder=order;if((raster||(split&&get('split-mode').value==='range'))&&get('page-range').value.trim()){const selected=selectedPages(previews.cards.length);get('page-range').value=pageOrder.filter(i=>selected.has(i)).map(i=>i+1).join(',');}invalidate();previews.refresh();},
   busy:()=>busy,removed:index=>removedPages.has(index),
   angle:(index,count)=>(turn(index)+(tool==='rotate-pdf'&&selectedPages(count).has(index)?Number(get('rotation').value):0))%360,
   onRotate:index=>{remember();pageTurns.set(index,(turn(index)+90)%360);invalidate();},
@@ -56,7 +56,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   list.hidden=!loaded;
   get('pdf-page-previews').hidden=jpg||!loaded;
   for(const [file,url] of imageUrls){if(!files.includes(file)){URL.revokeObjectURL(url);imageUrls.delete(file);imageTurns.delete(file);}}
-  if(previews && files[0]!==previewFile){previewFile=files[0];removedPages.clear();pageTurns.clear();pageOrder=[];void previews.setFile(previewFile);}
+  if(previews && files[0]!==previewFile){previewFile=files[0];removedPages.clear();pageTurns.clear();pageOrder=[];previews.ready=previews.setFile(previewFile);}
   previews?.refresh();
   files.forEach((file,index)=>{
    const item=document.createElement('li'), label=document.createElement('span');
@@ -93,7 +93,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   const batch=Array.from(incoming);
   const next=jpg||merge ? [...files,...batch] : batch;
   if(next.length>50 || (!jpg&&!merge&&next.length>1)) {feedback.textContent=tr('Select up to 50 files; this tool accepts one PDF at a time.','Выберите до 50 файлов; этот инструмент принимает один PDF за раз.');return;}
-  if(next.some(f=>!f.size || (jpg ? !/\.jpe?g$/i.test(f.name) && f.type!=='image/jpeg' : !/\.pdf$/i.test(f.name) && f.type!=='application/pdf'))) {feedback.textContent=tr('Select non-empty files in the correct format.','Выберите непустые файлы нужного формата.');return;}
+  if(next.some(f=>!f.size || (jpg ? (png?!/\.png$/i.test(f.name)&&f.type!=='image/png':!/\.jpe?g$/i.test(f.name)&&f.type!=='image/jpeg') : !/\.pdf$/i.test(f.name) && f.type!=='application/pdf'))) {feedback.textContent=tr('Select non-empty files in the correct format.','Выберите непустые файлы нужного формата.');return;}
   if(next.reduce((sum,f)=>sum+f.size,0)>MAX_TOTAL || (jpg&&next.some(f=>f.size>20*1024*1024))) {feedback.textContent=tr('Limit: 50 MB total, JPG up to 20 MB each.','Лимит: 50 МБ всего, JPG до 20 МБ каждое.');return;}
   remember();files=next;render();
  }
@@ -106,7 +106,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  for(const type of ['dragenter','dragover']) drop.addEventListener(type,e=>{e.preventDefault();if(!busy) drop.classList.add('dragging');});
  for(const type of ['dragleave','drop']) drop.addEventListener(type,e=>{e.preventDefault();drop.classList.remove('dragging');});
  drop.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
- root.querySelectorAll('#page-size,#page-range,#rotation,#split-mode').forEach(control=>control.addEventListener('input',()=>{remember(lastSettings);invalidate();previews?.refresh();}));
+ root.querySelectorAll('#page-size,#page-range,#rotation,#split-mode,#render-dpi').forEach(control=>control.addEventListener('input',()=>{remember(lastSettings);invalidate();previews?.refresh();}));
  get('split-mode')?.addEventListener('change',()=>{get('range-settings').hidden=get('split-mode').value==='each';previews?.refresh();});
  function indices(count) {
   const value=get('page-range').value.trim();
@@ -143,10 +143,10 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   const doc=await PDFLib.PDFDocument.create();
   let processed=0;for(const file of files) {
    let image;
-   try {image=await doc.embedJpg(await file.arrayBuffer());}catch{throw Error(tr('Cannot open JPG. Check that the file is a valid JPEG image.','Не удалось открыть JPG. Проверьте, что это корректное JPEG-изображение.'));}
+   try {const data=await file.arrayBuffer();if(png&&data.byteLength>=24){const view=new DataView(data);if(view.getUint32(0)===0x89504e47&&view.getUint32(16)*view.getUint32(20)>40000000)throw Error('pixel-limit');}image=png?await doc.embedPng(data):await doc.embedJpg(data);}catch(error){if(error.message==='pixel-limit')throw Error(tr('Image exceeds 40 megapixels.','Изображение превышает 40 мегапикселей.'));throw Error(tr('Cannot open image. Check the file format.','Не удалось открыть изображение. Проверьте формат файла.'));}
    if(image.width*image.height>40000000) throw Error(tr('JPG exceeds the 40 megapixel limit.','JPG превышает лимит 40 мегапикселей.'));
-   const a4=get('page-size').value==='a4', width=a4?595.28:image.width, height=a4?841.89:image.height;
-   const page=doc.addPage([width,height]), scale=a4?Math.min((width-48)/image.width,(height-48)/image.height):1;
+   const a4=get('page-size').value==='a4',fit=Math.min(1,14400/image.width,14400/image.height),width=a4?595.28:image.width*fit,height=a4?841.89:image.height*fit;
+   const page=doc.addPage([width,height]), scale=a4?Math.min((width-48)/image.width,(height-48)/image.height):fit;
    page.drawImage(image,{x:(width-image.width*scale)/2,y:(height-image.height*scale)/2,width:image.width*scale,height:image.height*scale});page.setRotation(PDFLib.degrees(imageTurns.get(file)||0));savePanel.progress(++processed,files.length);await new Promise(resolve=>setTimeout(resolve,0));
   }
   savePanel.wait(tr('Writing PDF…','Запись PDF…'));return doc.save();
@@ -163,6 +163,23 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
    download(await output.save(),'merged.pdf');return;
   }
   const source=await loadPdf(files[0]), base=files[0].name.replace(/\.pdf$/i,'');
+  if(raster){
+   const chosen=indices(source.getPageCount());if(chosen.length>100)throw Error(tr('Export up to 100 pages at a time.','Экспортируйте до 100 страниц за раз.'));
+   await previews.ready;if(!previews.doc)throw Error(tr('Cannot render this PDF.','Не удалось отрисовать PDF.'));
+   const archive=Object.create(null),ext=tool==='pdf-to-png'?'png':'jpg',mime=ext==='png'?'image/png':'image/jpeg';let total=0,done=0;
+   for(const index of chosen){
+    const page=await previews.doc.getPage(index+1),viewport=page.getViewport({scale:Number(get('render-dpi').value)/72,rotation:(page.rotate+turn(index))%360});
+    if(!Number.isFinite(viewport.width*viewport.height)||Math.ceil(viewport.width)*Math.ceil(viewport.height)>40000000)throw Error(tr('Rendered page exceeds 40 megapixels. Choose lower DPI.','Страница превышает 40 мегапикселей. Уменьшите DPI.'));
+    const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+    try{
+     await page.render({canvasContext:canvas.getContext('2d'),viewport,background:'rgb(255,255,255)'}).promise;
+     const blob=await new Promise(resolve=>canvas.toBlob(resolve,mime,.9));if(!blob)throw Error(tr('Image encoding failed.','Не удалось сохранить изображение.'));
+     total+=blob.size;if(total>200*1024*1024)throw Error(tr('Images exceed 200 MB. Export fewer pages or lower DPI.','Изображения превышают 200 МБ. Выберите меньше страниц или уменьшите DPI.'));
+     archive[`page-${String(index+1).padStart(3,'0')}.${ext}`]=new Uint8Array(await blob.arrayBuffer());savePanel.progress(++done,chosen.length);await new Promise(resolve=>setTimeout(resolve,0));
+    }finally{canvas.width=0;canvas.height=0;try{page.cleanup();}catch{}}
+   }
+   savePanel.wait(tr('Packaging images…','Упаковка изображений…'));await new Promise(resolve=>setTimeout(resolve,0));download(zipSync(archive,{level:0}),`${base}-images.zip`,'application/zip');return;
+  }
   const applyTurn=(page,index)=>page.setRotation(PDFLib.degrees((page.getRotation().angle+turn(index))%360));
   if(split&&get('split-mode').value==='each') {
    const archive=Object.create(null);
@@ -195,7 +212,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
    await new Promise(resolve=>setTimeout(resolve,0));
    await processPdf();feedback.textContent=tr('Ready. Download and check your files.','Готово. Скачайте и проверьте файлы.');
   }catch(error){clearResults();savePanel.fail();feedback.textContent=error.message||tr('Could not process these files. Try a smaller document.','Не удалось обработать файлы. Попробуйте документ меньшего размера.');}
-  finally{busy=false;savePanel.idle();root.removeAttribute('aria-busy');root.querySelectorAll('input,select').forEach(control=>control.disabled=false);run.textContent=split?tr('Split PDF','Разделить PDF'):tr('Create PDF','Создать PDF');render();if(results.firstElementChild) results.firstElementChild.focus();}
+  finally{busy=false;savePanel.idle();root.removeAttribute('aria-busy');root.querySelectorAll('input,select').forEach(control=>control.disabled=false);run.textContent=raster?tr('Create image ZIP','Создать ZIP изображений'):split?tr('Split PDF','Разделить PDF'):tr('Create PDF','Создать PDF');render();if(results.firstElementChild) results.firstElementChild.focus();}
  });
  FileWorkspace.reorder(list,{selector:'li[data-file-index]',key:card=>Number(card.dataset.fileIndex),busy:()=>busy,onMove:(from,to)=>{remember();files.splice(to,0,...files.splice(from,1));invalidate();render();}});
  lastSettings=settings();
