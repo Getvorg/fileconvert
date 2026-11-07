@@ -102,7 +102,7 @@ with sync_playwright() as p:
   else:page.locator('#lab-files').set_input_files(file('a.png',image(),'image/png'));expect(page.locator('#lab-cards li')).to_have_count(1)
   assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),slug
  page.screenshot(path='work/new-tools-mobile.png',full_page=True)
- page.goto(BASE+'/');assert page.locator('.tool-card').count()==12
+ page.goto(BASE+'/');assert page.locator('.tool-card').count()==21
  for slug in ['pdf-to-jpg','pdf-to-png','png-to-pdf','compress-image','resize-image']:assert page.locator(f'.tool-card[href="/{slug}/"]').count()==1
  assert not errors,errors
  assert not external,external

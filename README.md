@@ -27,6 +27,7 @@ python tests/preview_stage_browser.py
 python tests/page_actions_zip_browser.py
 python tests/workspace_polish_browser.py
 python tests/new_conversion_tools_browser.py
+python tests/advanced_tools_browser.py
 ```
 
 Browser checks require the local server, use `/usr/bin/chromium`, and save a screenshot in `work/`.
@@ -57,7 +58,7 @@ To build elsewhere, provide the same variables and upload only `dist/`. Configur
 2. **Delivered:** filterable tool cards, grouped top navigation, JPG → PDF with original/A4 pages, visual PDF merge with page reordering, split/extraction with inclusive page ranges or one file per page, relative clockwise PDF rotation. PDF processing uses locally bundled pdf-lib 1.17.1 (MIT license copied to `/vendor/pdf-lib.LICENSE.md`). Add tools in `scripts/catalog.mjs` to extend the directory and navigation.
 3. **Delivered:** visual PDF page organizer (`/organize-pdf/`, `/ru/organize-pdf/`), lazy thumbnails, drag reorder, keyboard/mobile position controls, individual and bulk deletion/rotation, 30-step undo and reset. Links are available from existing PDF tools.
 4. **Delivered:** PNG → PDF, PDF → JPG/PNG ZIP export, JPG/PNG/WebP image compression and resizing.
-5. **Next:** embedded image extraction, watermarks and page numbers, with browser integration tests.
+5. **Delivered:** page numbering, text/image watermarks, embedded raster extraction, lossless/raster PDF compression, cropping and four WebP conversion pages.
 6. **Separate evaluation:** compression, OCR, Office ↔ PDF, PDF/A, repair, redaction, signatures and forms. Some need backend services, font/rendering infrastructure or careful security validation. Visual overlays must never be described as secure redaction; adding a signature image is not a cryptographic signature.
 
 The screenshot is a long-term tool catalog, not a list of currently supported features. No nonworking PDF buttons are shown.
@@ -122,10 +123,23 @@ Reordering supports native mouse drag, touch-pointer handles, and arrow buttons.
 
 ## PDF images and image optimization
 
-The catalog now contains 12 tools (32 EN/RU pages including home and information pages). `png-to-pdf` reuses the image/PDF workspace, embeds PNG alpha, supports original/A4 pages, turns, ordering and Undo. Original-size PDF pages preserve image proportions and are scaled down if a side exceeds 14,400 PDF points. PNG dimensions are checked before embedding. `pdf-to-jpg` and `pdf-to-png` render selected pages with the existing local PDF.js worker and package images in one ZIP. Resolution choices are 72/144/216 DPI (144 default); JPG quality is 90%, PNG is lossless, page background white. This renders complete pages rather than extracting embedded images. Exports respect rotations, deletions and ordering; limit 100 selected pages, 40 MP per output image, 200 MB combined image data. Source PDF limits remain 50 MB / 500 pages.
+The catalog now contains 21 tools (50 EN/RU pages including home and information pages). `png-to-pdf` reuses the image/PDF workspace, embeds PNG alpha, supports original/A4 pages, turns, ordering and Undo. Original-size PDF pages preserve image proportions and are scaled down if a side exceeds 14,400 PDF points. PNG dimensions are checked before embedding. `pdf-to-jpg` and `pdf-to-png` render selected pages with the existing local PDF.js worker and package images in one ZIP. Resolution choices are 72/144/216 DPI (144 default); JPG quality is 90%, PNG is lossless, page background white. This renders complete pages rather than extracting embedded images. Exports respect rotations, deletions and ordering; limit 100 selected pages, 40 MP per output image, 200 MB combined image data. Source PDF limits remain 50 MB / 500 pages.
 
 `image-lab.js` powers `compress-image` and `resize-image`, supporting JPG, PNG and WebP, shared card actions, order, Undo, save metadata and real progress. One result downloads directly; batches use ZIP with stable ASCII names. Input limits are 50 images, 20 MB each / 50 MB total and 40 MP per image. Output is limited to 40 MP, 16,384 pixels per side and 200 MB image data per job. No new dependencies or external conversion services were added.
 
 Compression defaults to the source format and quality 80% for JPEG/WebP. PNG stays lossless. If same-format compression without rotation would increase size, the original is retained. Resizing offers aspect-preserving fit or exact dimensions, with enlargement off by default; quality defaults to 92%. PNG/WebP preserve alpha; JPEG uses a chosen background. The workspace reports input/output image bytes and actual reduction or growth, while the save panel reports actual download size (including ZIP overhead). SVG/HEIC/TIFF are not supported by these two image tools; mixed-file merge retains its wider browser-dependent import behavior.
 
 `tests/new_conversion_tools_browser.py` independently inspects PDF/ZIP/image outputs: raster DPI, colors, sizes, page turns/removals, PNG transparency in PDF, A4, noisy-JPEG reduction, alpha-preserving batches, exact/proportional resize, rotated dimensions, WebP, Undo/errors, EN/RU routes, catalog and mobile overflow.
+
+## Additional PDF and image tools
+
+- `number-pdf`: selectable pages, starting number, font size/color and page position. Numbers follow the current output-page order. Stamps are mapped into visible page coordinates, including existing page rotation and CropBox offsets.
+- `watermark-pdf`: text or PNG/JPG mark, position, opacity and angle. Text is rasterized at 2x size to support Unicode/Cyrillic without a font download; existing PDF text remains searchable. Watermarks are overlays, not secure redaction. Image marks are limited to 20 MB / 40 MP. History retains image-mark Files within the shared history budget.
+- `extract-images`: used embedded raster image objects are decoded at their pixel dimensions into PNG and packaged in ZIP. It does not export page screenshots or preserve compressed JPEG byte streams. Repeated object/rotation pairs are deduplicated. Vector artwork and standalone stencil masks are excluded; complex transparency may differ. Inline images and packed inline groups are handled. Card turns apply to extracted image pixels. Extraction uses its own PDF.js document so preview cleanup cannot remove in-flight image objects. Limit: 500 images / 40 MP each / 200 MB output image data.
+- `compress-pdf`: default lossless structural rewriting retains text and vectors, and retains the original bytes if an unedited file would grow. Without page edits it rewrites the original document (including document-level structures) rather than copying pages. Raster mode explicitly opts into JPEG page images, destroying searchable text/forms/vector detail; DPI/quality are configurable, up to 100 pages and 40 MP/page. Both modes show actual before/after sizes and do not guarantee reduction. Compression includes every retained page; remove unwanted pages using the cards.
+- `crop-image`: mouse/touch rectangle selection, free/1:1/4:3/16:9 presets, percentage coordinate inputs for keyboard use, shared turns/removal/Undo and batch ZIP. Free crops rotate with the image; fixed-ratio presets recenter after a quarter turn to preserve the requested ratio.
+- `webp-to-jpg`, `webp-to-png`, `jpg-to-webp`, `png-to-webp`: dedicated pages with source-format validation and fixed target formats. PNG/WebP preserve alpha; JPEG uses a chosen background. JPEG/WebP encoding is lossy at the selected quality.
+
+`pdf-extras.js` implements the new PDF operations; `scripts/pdf-extra-page.mjs` supplies their controls and instructions. No new external service, font download or dependency is used. General PDF editing compatibility limits still apply: edited copies can lose document-level structures and existing digital signatures are invalidated. Inspect outputs and retain originals.
+
+`tests/advanced_tools_browser.py` independently checks number positions on rotated pages, Cyrillic and image watermark payloads, embedded-image resolution/colors, lossless text preservation, raster text removal, four conversion formats/alpha, crop presets/coordinates/drag/Undo, bilingual routes and mobile overflow.
