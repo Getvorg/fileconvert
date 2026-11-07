@@ -29,9 +29,24 @@ function openModal() {
 }
 const el = id => document.getElementById(id);
 const t = key => translations[lang][key];
+const savePanel=FileWorkspace.savePanel({root:document.querySelector('.converter'),button:el('convert'),results:el('download'),name:document.body.dataset.mode==='png-jpg'?'image.jpg':'image.png'});
+const edits=FileWorkspace.history();
+const undo=FileWorkspace.undoRow(el('file'),()=>{
+ const state=edits.pop();if(!state)return;
+ el('background').value=state.background;el('backgroundValue').textContent=state.background.toUpperCase();lastBackground=state.background;
+ selectFile(state.files[0],{restore:true,rotation:state.rotation});undo.update(edits.length);
+});
+let lastBackground=el('background').value;
+function remember(background=lastBackground){edits.push({files:currentFile?[currentFile]:[],rotation:imageRotation,background});undo.update(edits.length);}
+FileWorkspace.decorate(el('rotateImage'),'rotate',lang==='ru'?'Повернуть на 90°':'Rotate 90°');el('rotateImage').removeAttribute('data-i18n');
+FileWorkspace.decorate(el('remove'),'delete',lang==='ru'?'Удалить изображение':'Delete image');
+const zoomImage=FileWorkspace.action('zoom',lang==='ru'?'Просмотр изображения':'Preview image',()=>{if(previewUrl)void FileWorkspace.openImage(previewUrl,currentFile.name,imageRotation);});zoomImage.id='zoomImage';
+const imageActions=document.createElement('div');imageActions.className='page-overlay';imageActions.append(zoomImage,el('rotateImage'),el('remove'));el('fileDetails').append(imageActions);el('fileDetails').classList.add('page-card');
+
 function setLanguage(next) {
   lang = next;
   document.documentElement.lang = lang; el('language').value = lang;
+  savePanel.setDefault(currentFile?currentFile.name.replace(/\.[^.]+$/,'')+(mode==='jpg-png'?'.png':'.jpg'):(mode==='jpg-png'?'image.png':'image.jpg'));
   document.querySelectorAll('[data-i18n]').forEach(element => { element.textContent = t(element.dataset.i18n); });
   el('dropHelp').textContent = t(mode === 'jpg-png' ? 'dropHintJpg' : 'dropHintPng');
   el('convert').textContent = t(mode === 'jpg-png' ? 'convertJpg' : 'convertPng');
@@ -39,7 +54,7 @@ function setLanguage(next) {
   if (downloadUrl) el('feedback').textContent = t('ready');
 }
 function clearOutput() {
-  closeModal();
+  closeModal();savePanel.invalidate();savePanel.idle();
   if (downloadUrl) URL.revokeObjectURL(downloadUrl);
   downloadUrl = null; el('download').hidden = true; el('download').removeAttribute('href');
   el('feedback').textContent = '';
@@ -57,7 +72,8 @@ function setMode(next) {
   el('pngOptions').hidden = mode !== 'png-jpg';
   clearFile(); setLanguage(lang);
 }
-function selectFile(file) {
+function selectFile(file,{restore=false,rotation=0}={}) {
+  if(!restore&&file)remember();
   clearFile();
   if (!file) return;
   const valid = mode === 'jpg-png' ? file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name) : file.type === 'image/png' || /\.png$/i.test(file.name);
@@ -67,18 +83,20 @@ function selectFile(file) {
   const selectedUrl = URL.createObjectURL(file);
   previewUrl = selectedUrl;
   const img = new Image();
-  img.onload = () => { if (version !== selectionVersion) return; currentFile = file; el('preview').src = previewUrl; el('fileName').textContent = file.name; el('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB'; el('fileDetails').hidden = false; el('dropzone').hidden = true; el('convert').disabled = false; };
+  img.onload = () => { if (version !== selectionVersion) return; currentFile = file;imageRotation=rotation;el('imagePreviewFrame').className='image-preview-frame turn-'+rotation;savePanel.setDefault(file.name.replace(/\.[^.]+$/,'')+(mode==='jpg-png'?'.png':'.jpg')); el('preview').src = previewUrl; el('fileName').textContent = file.name; el('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB'; el('fileDetails').hidden = false; el('dropzone').hidden = true; el('convert').disabled = false; };
   img.onerror = () => { if (version !== selectionVersion) return; clearFile(); el('feedback').textContent = t('errorOpen'); };
   img.src = selectedUrl;
 }
 function convert() {
   if (!currentFile || !previewUrl) return;
   clearOutput(); const file = currentFile; const src = previewUrl; const selectedMode = mode;const selectedVersion=selectionVersion;const rotation=imageRotation;
+  savePanel.begin(lang==='ru'?'Чтение изображения…':'Reading image…');
   el('convert').disabled = true; el('convert').textContent = t('working');
   const image = new Image();
   image.onload = () => {
     if(selectedVersion!==selectionVersion)return;
     try {
+      savePanel.wait(lang==='ru'?'Поворот и конвертация…':'Rotating and converting…');
       const canvas = document.createElement('canvas');
       canvas.width = rotation%180 ? image.naturalHeight : image.naturalWidth; canvas.height = rotation%180 ? image.naturalWidth : image.naturalHeight;
       if (!canvas.width || !canvas.height || canvas.width * canvas.height > 40000000) throw Error('Empty image');
@@ -90,23 +108,23 @@ function convert() {
       canvas.toBlob(blob => {
         if (mode !== selectedMode || currentFile !== file || selectedVersion!==selectionVersion) return;
         el('convert').disabled = false; el('convert').textContent = t(selectedMode === 'jpg-png' ? 'convertJpg' : 'convertPng');
-        if (!blob) { el('feedback').textContent = t('errorConvert'); return; }
+        if (!blob) {savePanel.fail(); el('feedback').textContent = t('errorConvert'); return; }
         downloadUrl = URL.createObjectURL(blob);
         const ext = selectedMode === 'jpg-png' ? 'png' : 'jpg';
         el('download').href = downloadUrl;
-        el('download').download = file.name.replace(/\.[^.]+$/, '') + '.' + ext;
+        el('download').download = savePanel.outputName(file.name.replace(/\.[^.]+$/, '') + '.' + ext);
         el('download').hidden = false;
         el('feedback').textContent = t('ready');
-        openModal();
+        savePanel.complete(file.name.replace(/\.[^.]+$/, '')+'.'+ext,blob.size);openModal();
       }, mime, selectedMode === 'png-jpg' ? 0.92 : undefined);
     } catch (e) {
       if(selectedVersion!==selectionVersion)return;
       el('convert').disabled = false; el('convert').textContent = t(selectedMode === 'jpg-png' ? 'convertJpg' : 'convertPng');
       el('feedback').textContent = t('errorConvert');
-      console.error(e);
+      savePanel.fail();console.error(e);
     }
   };
-  image.onerror = () => { if(selectedVersion!==selectionVersion)return; el('convert').disabled = false; el('convert').textContent = t(selectedMode === 'jpg-png' ? 'convertJpg' : 'convertPng'); el('feedback').textContent = t('errorOpen'); };
+  image.onerror = () => { if(selectedVersion!==selectionVersion)return;savePanel.fail(); el('convert').disabled = false; el('convert').textContent = t(selectedMode === 'jpg-png' ? 'convertJpg' : 'convertPng'); el('feedback').textContent = t('errorOpen'); };
   image.src = src;
 }
 document.querySelectorAll('.mode-tab').forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
@@ -117,11 +135,11 @@ el('file').addEventListener('change', event => selectFile(event.target.files[0])
 for (const eventName of ['dragenter','dragover']) el('dropzone').addEventListener(eventName, event => {event.preventDefault();el('dropzone').classList.add('dragging');});
 for (const eventName of ['dragleave','drop']) el('dropzone').addEventListener(eventName, event => {event.preventDefault();el('dropzone').classList.remove('dragging');});
 el('dropzone').addEventListener('drop', event => selectFile(event.dataTransfer.files[0]));
-el('rotateImage').addEventListener('click',()=>{if(!currentFile)return;imageRotation=(imageRotation+90)%360;selectionVersion++;clearOutput();el('imagePreviewFrame').className='image-preview-frame turn-'+imageRotation;el('convert').disabled=false;el('convert').textContent=t(mode==='jpg-png'?'convertJpg':'convertPng');});
+el('rotateImage').addEventListener('click',()=>{if(!currentFile)return;remember();imageRotation=(imageRotation+90)%360;selectionVersion++;clearOutput();el('imagePreviewFrame').className='image-preview-frame turn-'+imageRotation;el('convert').disabled=false;el('convert').textContent=t(mode==='jpg-png'?'convertJpg':'convertPng');});
 el('changeFile').addEventListener('click',()=>el('file').click());
-el('remove').addEventListener('click',()=>{clearFile();el('dropzone').focus();});
+el('remove').addEventListener('click',()=>{remember();clearFile();el('dropzone').focus();});
 el('convert').addEventListener('click', convert);
-el('background').addEventListener('input', event => { el('backgroundValue').textContent = event.target.value.toUpperCase();clearOutput(); });
+el('background').addEventListener('input', event => { remember();selectionVersion++;el('convert').disabled=!currentFile;el('convert').textContent=t(mode==='jpg-png'?'convertJpg':'convertPng');lastBackground=event.target.value;el('backgroundValue').textContent = event.target.value.toUpperCase();clearOutput(); });
 el('modalClose').addEventListener('click', closeModal);
 el('modalDone').addEventListener('click', closeModal);
 el('successModal').addEventListener('click', event => { if (event.target === el('successModal')) closeModal(); });

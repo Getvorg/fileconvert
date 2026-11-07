@@ -12,7 +12,7 @@ npm run build
 npm start
 ```
 
-Open http://127.0.0.1:8000. Edit `templates/converter.html`, `app.js`, `pdf-tools.js`, `catalog.js`, `pdf-organizer.js`, `pdf-thumbnails.js`, `styles.css`, and the modules in `scripts/`; rebuild after changes. Only `dist/` is served and deployed. Builds without `SITE_URL` intentionally disable search indexing.
+Open http://127.0.0.1:8000. Edit `templates/converter.html`, `app.js`, `pdf-tools.js`, `catalog.js`, `pdf-organizer.js`, `pdf-thumbnails.js`, `workspace-ui.js`, `styles.css`, and the modules in `scripts/`; rebuild after changes. Only `dist/` is served and deployed. Builds without `SITE_URL` intentionally disable search indexing.
 
 ```sh
 npm run check
@@ -25,6 +25,7 @@ python tests/merge_visual_browser.py
 python tests/mixed_merge_browser.py
 python tests/preview_stage_browser.py
 python tests/page_actions_zip_browser.py
+python tests/workspace_polish_browser.py
 ```
 
 Browser checks require the local server, use `/usr/bin/chromium`, and save a screenshot in `work/`.
@@ -105,3 +106,15 @@ Split defaults to one PDF per remaining page inside a ZIP (`page-001.pdf`, `page
 `tests/page_actions_zip_browser.py` opens the downloaded archive with Python zipfile, checks integrity/entry names, independently parses every page, verifies saved rotations/deletions and image dimensions, and covers reset/last-page behavior, EN/RU and mobile layout.
 
 Document options (page range, bulk rotation, split output mode, JPG page size) now sit inside a closed Advanced settings disclosure. The redundant link to a separate visual editor is removed from tool workspaces. Per-card actions remain the primary controls. Bulk PDF rotation defaults to 0°, so selecting a document alone never rotates it; card quarter turns still add to any explicitly chosen bulk angle.
+
+## Shared cards, undo and save panel
+
+`workspace-ui.js` supplies the same SVG preview/rotate/delete actions and tooltips across all seven tools, image/PDF preview dialogs, reorder handles, history helpers and the result panel. The panel sits beside the workspace above 900px, follows the page while scrolling, and moves below the workspace on smaller screens. Users can set an output filename; names are sanitized and the correct output extension is kept. Renaming an already generated result updates download attributes without regenerating file data. Exact output size is shown after processing, never estimated.
+
+Progress is measured when page/image counts are available (ZIP generation, image-to-PDF pages and copied source pages); reading, encoding and final PDF/ZIP serialization use an indeterminate indicator. No timer simulates progress. ZIP loops yield to the browser between batches. Editing/undo invalidates previous download links and size metadata.
+
+Split/rotate/JPG-to-PDF and image converters now have Undo controls; merge/organize retain their existing Undo. The new history stores at most 30 states and trims older entries when their unique source files exceed 100 MB. File bytes are referenced rather than copied, with image URLs regenerated on restore. This budget excludes the current document and decoded browser/worker memory. Settings, page turns/removals and order are restored. Preview dialogs support close/Escape and restore focus to the triggering control.
+
+Reordering supports native mouse drag, touch-pointer handles, and arrow buttons. PDF source page indices stay stable while visual/output order changes. ZIP entry names retain original page numbers, and entries follow the chosen page order. JPEG pages remain encoded JPEG data; PDF page rotations are applied after embedding. PNG/JPG converters apply rotations to exported pixels.
+
+`tests/workspace_polish_browser.py` checks Undo after deletion and rotation, reorder/Undo, all preview buttons, custom names, exact byte sizes, measured ZIP progress, independently parsed PDF/image/ZIP output, both languages, desktop/mobile layout and real browser touch events. Existing conversion, PDF and preview suites remain part of verification.

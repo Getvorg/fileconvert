@@ -14,10 +14,13 @@ let pages = [], history = [], busy = false, revision = 0, downloadUrl = null;
 let renderQueue = [], rendering = false, dragId = null;
 const cards = new Map();
 const visible = new Set();
-const outputName = () => mergeMode ? 'merged.pdf' : sourceName.replace(/\.pdf$/i, '') + '-organized.pdf';
+const suggestedName=()=>mergeMode?'merged.pdf':(sourceName||'document.pdf').replace(/\.pdf$/i,'')+'-organized.pdf';
+const savePanel=FileWorkspace.savePanel({root:document.querySelector('[data-editor-mode]'),button:save,results:result,name:suggestedName()});
+const outputName=()=>savePanel.outputName(suggestedName());
+FileWorkspace.decorate(get('editor-undo'),'undo',t('Undo last edit','Отменить последнее действие'));const undoLabel=document.createElement('span');undoLabel.textContent=t('Undo','Отменить');get('editor-undo').append(undoLabel);get('editor-undo').classList.add('workspace-undo-button');
 function clearDownload() {
  if (downloadUrl) URL.revokeObjectURL(downloadUrl);
- downloadUrl = null; result.replaceChildren();
+ downloadUrl = null; result.replaceChildren();savePanel.invalidate();
 }
 function announce(text) { feedback.textContent = text; }
 function snapshot() { return pages.map(page => ({...page})); }
@@ -27,6 +30,7 @@ function remember() {
  clearDownload();
 }
 function controls() {
+ savePanel.setDefault(suggestedName());
  const selected = pages.filter(page => page.selected).length;
  get('editor-count').textContent = t(`${pages.length} pages · ${selected} selected`, `${pages.length} стр. · выбрано: ${selected}`);
  get('editor-select-all').disabled = busy || !pages.length || selected === pages.length;
@@ -110,15 +114,7 @@ async function renderThumbnails() {
  } finally { rendering = false; }
 }
 function button(action, text, label, id) {
- const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.dataset.action = action;
- node.setAttribute('aria-label', `${label} ${id + 1}`);
- node.title = label.replace(/: (page|страница)$/, '');
- if(action==='zoom') {
-  node.textContent='';
-  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('width','18');svg.setAttribute('height','18');svg.setAttribute('aria-hidden','true');
-  const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d','M21 21l-5-5M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z');path.setAttribute('fill','none');path.setAttribute('stroke','currentColor');path.setAttribute('stroke-width','1.8');path.setAttribute('stroke-linecap','round');svg.append(path);node.append(svg);
- }
- node.addEventListener('click', () => act(action, id));
+ const node=FileWorkspace.action(action,`${label} ${id+1}`,()=>act(action,id));
  return node;
 }
 function createCard(page) {
@@ -322,7 +318,7 @@ get('editor-reset').addEventListener('click', () => {
 });
 save.addEventListener('click', async () => {
  if (busy || !sources.length || !pages.length || (mergeMode && sources.length < 2)) return;
- busy = true; clearDownload(); controls(); save.textContent = t('Saving…', 'Сохранение…'); announce(t('Creating your PDF…', 'Создание PDF…'));
+ busy = true; clearDownload(); controls(); savePanel.begin();save.textContent = t('Saving…', 'Сохранение…'); announce(t('Creating your PDF…', 'Создание PDF…'));
  try {
   await new Promise(resolve => setTimeout(resolve, 0));
   const output = await window.PDFLib.PDFDocument.create();
@@ -331,14 +327,15 @@ save.addEventListener('click', async () => {
    const chosen = pages.filter(page=>page.sourceId===source.id);
    if (!chosen.length) continue;
    const copied = await output.copyPages(source.doc,chosen.map(page=>page.index));
-   copied.forEach((page,index)=>copiedById.set(chosen[index].id,page));
+   copied.forEach((page,index)=>copiedById.set(chosen[index].id,page));savePanel.progress(copiedById.size,pages.length);await new Promise(resolve=>setTimeout(resolve,0));
   }
   pages.forEach(entry=>{const page=copiedById.get(entry.id);page.setRotation(window.PDFLib.degrees((page.getRotation().angle+entry.turn)%360));output.addPage(page);});
+  savePanel.wait(t('Writing PDF…','Запись PDF…'));
   const bytes = await output.save();
   downloadUrl = URL.createObjectURL(new Blob([bytes], {type: 'application/pdf'}));
   const link = document.createElement('a'); link.href = downloadUrl; link.download = outputName(); link.className = 'download-button'; link.textContent = `↓ ${outputName()}`;
-  result.append(link); link.focus(); announce(t('Ready. Download and check your PDF.', 'Готово. Скачайте и проверьте PDF.'));
- } catch { clearDownload(); announce(t('Could not save this PDF. Try a smaller or simpler document.', 'Не удалось сохранить PDF. Попробуйте документ меньшего размера или сложности.')); }
+  result.append(link);savePanel.complete(suggestedName(),bytes.length); link.focus(); announce(t('Ready. Download and check your PDF.', 'Готово. Скачайте и проверьте PDF.'));
+ } catch { clearDownload();savePanel.fail(); announce(t('Could not save this PDF. Try a smaller or simpler document.', 'Не удалось сохранить PDF. Попробуйте документ меньшего размера или сложности.')); }
  finally { busy = false; save.textContent = mergeMode ? t('Merge PDF', 'Объединить PDF') : t('Save PDF', 'Сохранить PDF'); controls(); }
 });
 // Blob links are cleared when the document changes or the tab is closed.
@@ -373,3 +370,7 @@ async function openZoom(id) {
 get('page-preview-close').addEventListener('click',closeZoom);
 get('page-preview-dialog').addEventListener('cancel',event=>{event.preventDefault();closeZoom();});
 get('page-preview-dialog').addEventListener('click',event=>{if(event.target===get('page-preview-dialog'))closeZoom();});
+
+controls();
+
+FileWorkspace.reorder(grid,{selector:'li[data-page-id]',key:card=>Number(card.dataset.pageId),busy:()=>busy,onMove:(from,to)=>movePage(from,pages.findIndex(page=>page.id===to),'[data-action=rotate]')});
