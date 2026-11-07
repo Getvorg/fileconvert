@@ -133,7 +133,7 @@ with sync_playwright() as p:
         page.goto(BASE+prefix)
         assert page.locator(f'.tool-card[href="{prefix}organize-pdf/"]').count()==1
         page.goto(BASE+prefix+'rotate-pdf/')
-        assert page.locator(f'.editor-link a[href="{prefix}organize-pdf/"]').count()==1
+        assert page.locator('.editor-link').count()==0
     assert not errors,errors
     assert not external,external
     assert not failures,failures

@@ -51,22 +51,26 @@ with sync_playwright() as p:
    preview_y=page.locator('#pdf-page-previews').evaluate('(e)=>e.getBoundingClientRect().top+scrollY')
    assert abs(preview_y-drop_y)<120,(slug,drop_y,preview_y)
    first=page.locator('[data-preview-page="1"]');first.scroll_into_view_if_needed()
-   expect(first.locator('img')).to_have_attribute('data-angle','90' if slug=='rotate-pdf' else '0')
+   expect(first.locator('img')).to_have_attribute('data-angle','0')
    if slug=='split-pdf':
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#split-mode').select_option('range')
     first.locator('input[type=checkbox]').uncheck()
     expect(page.locator('#page-range')).to_have_value('2,3')
     doc=output();assert [p.get_text().strip() for p in doc]==['TWO','THREE']
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#page-range').fill('3,1')
     assert page.locator('[data-preview-page="1"] input').is_checked()
     assert not page.locator('[data-preview-page="2"] input').is_checked()
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#split-mode').select_option('each')
     assert first.locator('input').is_disabled()
    else:
     page.locator('[data-preview-page="2"] input').uncheck()
     expect(page.locator('#page-range')).to_have_value('1,3')
     expect(page.locator('[data-preview-page="2"] img')).to_have_attribute('data-angle','0')
-    doc=output();assert [p.rotation for p in doc]==[90,0,90]
+    doc=output();assert [p.rotation for p in doc]==[0,0,0]
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#rotation').select_option('180')
     expect(first.locator('img')).to_have_attribute('data-angle','180')
    page.locator('#pdf-clear').click()

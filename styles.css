@@ -34,3 +34,6 @@ nav{display:flex;justify-content:center;flex-wrap:wrap;gap:12px 24px;padding:17p
 
 /* Rotation and removal are available on every file/page card. */
 .page-card[hidden]{display:none!important}.pdf-tool .page-card{position:relative}.pdf-tool .page-overlay{top:38px}.image-preview-frame{height:270px;width:100%;display:flex;align-items:center;justify-content:center}.file-details .image-preview-frame #preview{width:auto;height:auto;max-width:220px;max-height:220px;object-fit:contain}.turn-90 img{transform:rotate(90deg)}.turn-180 img{transform:rotate(180deg)}.turn-270 img{transform:rotate(270deg)}.image-card-grid .page-thumbnail img{max-width:180px;max-height:180px}.file-details #rotateImage{order:2}.pdf-tool .page-overlay button{width:34px;height:34px}.pdf-tool .stage-controls{flex-wrap:wrap}
+
+/* Keep secondary document controls out of the main workspace. */
+.tool-settings{margin-top:22px;border-top:1px solid #e4dfea;color:#756e7e}.tool-settings>summary{font-size:13px;padding:15px 2px;cursor:pointer;width:fit-content}.tool-settings[open]{padding-bottom:10px}.tool-settings .pdf-settings{margin-top:10px}.tool-settings .pdf-settings label{font-size:13px}.tool-settings .pdf-settings p{font-size:12px}.tool-settings select,.tool-settings input{font-size:13px;padding:10px}

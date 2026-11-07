@@ -82,15 +82,19 @@ with sync_playwright() as p:
     page.locator('[data-page-id="0"] [data-action=delete]').click()
     assert page.locator('#editor-result a').count()==0
     visit('split-pdf',True)
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#split-mode').select_option('range')
     source=document(['one','two','three'])
     page.locator('#pdf-files').set_input_files(upload('source.pdf',source))
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#page-range').fill('3,1-2,3')
     run(); result=read(output())
     assert [x.get_text().strip() for x in result]==['three','one','two']
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#page-range').fill('0,4')
     run(); assert page.locator('#pdf-results a').count()==0
     assert 'Диапазон' in page.locator('#pdf-feedback').inner_text()
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#split-mode').select_option('each')
     assert page.locator('#range-settings').is_hidden()
     run(); assert page.locator('#pdf-results a').count()==1
@@ -99,9 +103,11 @@ with sync_playwright() as p:
     assert read(archive.read('page-002.pdf'))[0].get_text().strip()=='two'
     visit('rotate-pdf')
     page.locator('#pdf-files').set_input_files(upload('a.pdf',a))
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#page-range').fill('1');page.locator('#rotation').select_option('180')
     run();result=read(output())
     assert [x.rotation for x in result]==[270,0]
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#page-range').fill('');page.locator('#rotation').select_option('90')
     run();result=read(output());assert [x.rotation for x in result]==[180,90]
     # Encrypted and malformed PDFs must fail without providing a partial result.
@@ -125,6 +131,7 @@ with sync_playwright() as p:
     run();result=read(output())
     assert len(result)==2 and result[0].rect.width==120 and result[0].rect.height==80
     pix=result[0].get_pixmap(); assert pix.pixel(60,40)[0]>240
+    page.locator('#tool-settings').evaluate('(e)=>e.open=true')
     page.locator('#page-size').select_option('a4');run();result=read(output())
     assert abs(result[0].rect.width-595.28)<0.1 and abs(result[0].rect.height-841.89)<0.1
     assert result[0].get_pixmap().pixel(0,0)==(255,255,255)

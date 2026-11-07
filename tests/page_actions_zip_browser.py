@@ -45,19 +45,21 @@ with sync_playwright() as p:
   one=fitz.open(stream=archive.read('page-001.pdf'),filetype='pdf');three=fitz.open(stream=archive.read('page-003.pdf'),filetype='pdf')
   assert len(one)==len(three)==1 and one[0].rotation==90 and three[0].rotation==0
   assert one[0].get_text().strip()=='ONE' and three[0].get_text().strip()=='THREE'
+  page.locator('#tool-settings').evaluate('(e)=>e.open=true')
   page.locator('#split-mode').select_option('range');page.locator('#page-range').fill('3,1')
   _,data=run();doc=fitz.open(stream=data,filetype='pdf')
   assert [p.get_text().strip() for p in doc]==['THREE','ONE'] and [p.rotation for p in doc]==[0,90]
   page.locator('#pdf-reset-pages').click();assert page.locator('[data-preview-page]:visible').count()==3
   page.locator('[data-preview-page="2"] [data-action=delete]').click();page.locator('[data-preview-page="3"] [data-action=delete]').click()
   assert first.locator('[data-action=delete]').is_disabled()
+  page.locator('#tool-settings').evaluate('(e)=>e.open=true')
   page.locator('#split-mode').select_option('each');_,data=run()
   assert len(zipfile.ZipFile(io.BytesIO(data)).namelist())==1
   page.goto(BASE+prefix+'rotate-pdf/');page.locator('#pdf-files').set_input_files(file('source.pdf',pdf(),'application/pdf'))
   expect(page.locator('[data-preview-page]')).to_have_count(3)
   page.locator('[data-preview-page="1"] [data-action=rotate]').click();page.locator('[data-preview-page="2"] [data-action=delete]').click()
   _,data=run();doc=fitz.open(stream=data,filetype='pdf')
-  assert [p.get_text().strip() for p in doc]==['ONE','THREE'] and [p.rotation for p in doc]==[180,90]
+  assert [p.get_text().strip() for p in doc]==['ONE','THREE'] and [p.rotation for p in doc]==[90,0]
   page.goto(BASE+prefix+'jpg-to-pdf/')
   page.locator('#pdf-files').set_input_files([file('a.jpg',image('JPEG'),'image/jpeg'),file('b.jpg',image('JPEG'),'image/jpeg')])
   page.get_by_role('button',name=('Повернуть: ' if prefix=='/ru/' else 'Rotate: ')+'a.jpg',exact=True).click()
