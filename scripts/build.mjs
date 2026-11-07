@@ -12,7 +12,7 @@ const app = fs.readFileSync('app.js','utf8');
 const translations = vm.runInNewContext(app.slice(app.indexOf('const translations ='),app.indexOf('const MAX_SIZE')) + '; translations');
 const template = fs.readFileSync('templates/converter.html','utf8');
 fs.rmSync('dist',{recursive:true,force:true}); fs.mkdirSync('dist');
-for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js','pdf-thumbnails.js','workspace-ui.js','image-lab.js','pdf-extras.js']) fs.copyFileSync(file,`dist/${file}`);
+for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js','pdf-thumbnails.js','workspace-ui.js','image-lab.js','pdf-extras.js','live-stamp.js']) fs.copyFileSync(file,`dist/${file}`);
 fs.mkdirSync('dist/vendor');
 fs.copyFileSync('node_modules/fflate/esm/browser.js','dist/vendor/fflate.mjs');
 fs.copyFileSync('node_modules/fflate/LICENSE','dist/vendor/fflate.LICENSE');

@@ -25,7 +25,7 @@ function render(){
   const label=document.createElement('span');label.className='page-source-name';label.textContent=record.file.name;label.title=record.file.name;
   const meta=document.createElement('span');meta.className='page-position';meta.textContent=`${record.width} × ${record.height} · ${FileWorkspace.formatBytes(record.file.size)}`;
   const actions=document.createElement('div');actions.className='page-overlay';
-  for(const [kind,title,action] of [['zoom',t('Preview','Просмотр'),()=>FileWorkspace.openImage(record.url,record.file.name,record.turn)],['rotate',t('Rotate','Повернуть'),()=>{record.turn=(record.turn+90)%360;if(crop){if(get('crop-ratio').value==='free'){const old=record.crop;record.crop={x:1-old.y-old.h,y:old.x,w:old.h,h:old.w};}else record.crop=centerCrop(record,get('crop-ratio').value);}}],['delete',t('Delete','Удалить'),()=>{records.splice(index,1);URL.revokeObjectURL(record.url);}]] ){
+  for(const [kind,title,action] of [['zoom',t('Preview','Просмотр'),()=>FileWorkspace.openImages(records.map(r=>({url:r.url,title:r.file.name,angle:r.turn})),index)],['rotate',t('Rotate','Повернуть'),()=>{record.turn=(record.turn+90)%360;if(crop){if(get('crop-ratio').value==='free'){const old=record.crop;record.crop={x:1-old.y-old.h,y:old.x,w:old.h,h:old.w};}else record.crop=centerCrop(record,get('crop-ratio').value);}}],['delete',t('Delete','Удалить'),()=>{records.splice(index,1);URL.revokeObjectURL(record.url);}]] ){
    const button=FileWorkspace.action(kind,`${title}: ${record.file.name}`,()=>{if(busy)return;if(kind==='zoom'){action();return;}remember();action();invalidate();render();});button.disabled=busy;actions.append(button);
   }
   const move=document.createElement('div');move.className='card-move-controls';

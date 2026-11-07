@@ -1,12 +1,12 @@
 // Lazy page previews for split/rotate; file processing remains in pdf-tools.js.
 export class PDFThumbnails {
  constructor(container, options) {
-  this.container=container; this.options=options; this.version=0; this.task=null; this.doc=null; this.cards=[];this.queue=[];this.rendering=false;this.visible=new Set();
+  this.container=container; this.options=options; this.version=0; this.task=null; this.doc=null; this.cards=[];this.queue=[];this.rendering=false;this.visible=new Set();this.resultDoc=null;this.resultMap=new Map();this.resultVersion=0;window.addEventListener('resize',()=>this.cards.forEach((card,index)=>this.positionStamp(card,index)));
   FileWorkspace.reorder(container,{selector:'li[data-preview-page]',key:card=>Number(card.dataset.previewPage)-1,busy:()=>this.options.busy(),onMove:(from,to)=>this.options.onMove(from,to)});
   this.observer=new IntersectionObserver(entries=>{for(const entry of entries){const index=Number(entry.target.dataset.previewPage)-1;if(entry.isIntersecting){this.visible.add(index);this.enqueue(index);}else{this.visible.delete(index);this.release(this.cards[index]);}}},{rootMargin:'300px'});
  }
  release(card){if(!card)return;const img=card.querySelector('img');if(img.dataset.url)URL.revokeObjectURL(img.dataset.url);img.removeAttribute('src');delete img.dataset.url;delete img.dataset.angle;}
- clear(){FileWorkspace.closePreview();this.version++;this.observer.disconnect();this.cards.forEach(card=>this.release(card));this.cards=[];this.visible.clear();this.queue=[];this.container.replaceChildren();const old=this.task;this.task=null;this.doc=null;void old?.destroy().catch(()=>{});}
+ clear(){this.resultDoc=null;this.resultMap=new Map();this.resultVersion++;FileWorkspace.closePreview();this.version++;this.observer.disconnect();this.cards.forEach(card=>this.release(card));this.cards=[];this.visible.clear();this.queue=[];this.container.replaceChildren();const old=this.task;this.task=null;this.doc=null;void old?.destroy().catch(()=>{});}
  async setFile(file){
   this.clear();if(!file)return;const version=this.version;
   const loading=document.createElement('p');loading.textContent=this.options.t('Loading page previews…','Загрузка миниатюр страниц…');this.container.append(loading);
@@ -37,6 +37,11 @@ export class PDFThumbnails {
      const button=FileWorkspace.action(kind,`${title}: ${index+1}`,()=>{if(this.options.busy())return;const order=this.options.order(doc.numPages).filter(i=>!this.options.removed(i)),position=order.indexOf(index),target=order[position+direction];if(target!==undefined)this.options.onMove(index,target);});move.append(button);
     }
     const position=document.createElement('span');position.className='page-position';
+    if(this.options.stampPoint){const handle=document.createElement('button');handle.type='button';handle.className='stamp-move-handle';handle.textContent='✥';handle.title=this.options.t('Drag watermark/number','Перетащить знак или номер');handle.setAttribute('aria-label',handle.title);frame.append(handle);let moving=false;
+     handle.addEventListener('pointerdown',event=>{if(this.options.busy())return;event.preventDefault();event.stopPropagation();moving=true;this.options.onStampStart();handle.setPointerCapture(event.pointerId);});
+     handle.addEventListener('pointermove',event=>{if(!moving)return;const img=frame.querySelector('img'),r=img.getBoundingClientRect();if(!r.width||!r.height)return;const x=Math.min(100,Math.max(0,(event.clientX-r.left)/r.width*100)),y=Math.min(100,Math.max(0,(event.clientY-r.top)/r.height*100));this.options.onStampMove(index,x,y);this.positionStamp(card,index);});
+     handle.addEventListener('pointerup',()=>{moving=false;});handle.addEventListener('pointercancel',()=>{moving=false;});frame.querySelector('img').addEventListener('load',()=>this.positionStamp(card,index));
+    }
     card.append(label,actions,frame,position,move);this.cards.push(card);this.container.append(card);this.observer.observe(card);
    }
    this.refresh();
@@ -49,18 +54,21 @@ export class PDFThumbnails {
    checkbox.checked=selected.has(index);checkbox.disabled=this.options.disabled();card.classList.toggle('is-selected',checkbox.checked);
    card.querySelector('[data-action=zoom]').disabled=this.options.busy();card.querySelector('.page-drag').draggable=!this.options.busy();
    card.querySelector('[data-action=rotate]').disabled=this.options.busy();card.querySelector('[data-action=delete]').disabled=this.options.busy()||remaining<=1;
+   this.positionStamp(card,index);
    if(removed){this.visible.delete(index);this.release(card);}else if(this.visible.has(index))this.enqueue(index);
   }
   const desired=this.options.order(count),active=desired.filter(index=>!this.options.removed(index));
   this.cards.forEach((card,index)=>{const position=active.indexOf(index);card.querySelector('.page-position').textContent=this.options.t(`Position ${position+1} of ${active.length}`,`Позиция ${position+1} из ${active.length}`);card.querySelector('[data-action=previous]').disabled=this.options.busy()||position<=0;card.querySelector('[data-action=next]').disabled=this.options.busy()||position===active.length-1;});const actual=[...this.container.children].map(card=>Number(card.dataset.previewPage)-1);
   if(actual.some((id,index)=>id!==desired[index]))desired.forEach(index=>this.container.append(this.cards[index]));
  }
+ setResultPreview(doc,map=new Map()){this.resultDoc=doc;this.resultMap=map;this.resultVersion++;this.cards.forEach(card=>this.release(card));this.refresh();document.getElementById('workspace-preview-dialog')?.dispatchEvent(new Event('viewer-refresh'));}
+ positionStamp(card,index){const handle=card.querySelector('.stamp-move-handle');if(!handle)return;const img=card.querySelector('img'),frame=card.querySelector('.page-thumbnail');handle.hidden=!this.options.selection(this.cards.length).has(index)||!img.hasAttribute('src')||this.options.removed(index);if(handle.hidden)return;const point=this.options.stampPoint(index),r=img.getBoundingClientRect(),f=frame.getBoundingClientRect();handle.style.left=(r.left-f.left+r.width*point.x)+'px';handle.style.top=(r.top-f.top+r.height*point.y)+'px';handle.disabled=this.options.busy();}
  async previewPage(index){
-  const doc=this.doc,version=this.version;if(!doc)return;
-  await FileWorkspace.openPreview(this.options.t(`Page ${index+1}`,`Страница ${index+1}`),async(canvas,current,cancel)=>{
-   const page=await doc.getPage(index+1);if(!current()||version!==this.version)return;
-   const rotation=(page.rotate+this.options.angle(index,this.cards.length))%360,natural=page.getViewport({scale:1,rotation}),scale=Math.min(1200/natural.width,1500/natural.height),viewport=page.getViewport({scale,rotation});
-   canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);const task=page.render({canvasContext:canvas.getContext('2d'),viewport});cancel(()=>task.cancel());await task.promise;
+  const version=this.version;const order=this.options.order(this.cards.length).filter(i=>!this.options.removed(i));
+  await FileWorkspace.openPages(order.map(index=>({index,title:this.options.t(`Page ${index+1}`,`Страница ${index+1}`)})),order.indexOf(index),async(entry,canvas,current,cancel,zoom)=>{
+   const doc=this.resultDoc||this.doc;if(!doc)return;const sourceIndex=this.resultDoc?this.resultMap.get(entry.index):entry.index;if(sourceIndex===undefined)return;const page=await doc.getPage(sourceIndex+1);if(!current()||version!==this.version)return;
+   const rotation=(page.rotate+(this.resultDoc?0:this.options.angle(entry.index,this.cards.length)))%360,natural=page.getViewport({scale:1,rotation}),scale=Math.min(1200/natural.width,1500/natural.height)*zoom,viewport=page.getViewport({scale,rotation});
+   if(viewport.width*viewport.height>40000000)throw Error('Preview exceeds 40 MP');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);const task=page.render({canvasContext:canvas.getContext('2d'),viewport});cancel(()=>task.cancel());await task.promise;
   });
  }
 
@@ -68,21 +76,21 @@ export class PDFThumbnails {
  async render(){
   if(this.rendering)return;this.rendering=true;
   try{while(this.queue.length){
-   const index=this.queue.shift(), card=this.cards[index], doc=this.doc, version=this.version;
+   const index=this.queue.shift(), card=this.cards[index],doc=this.resultDoc||this.doc,version=this.version,resultVersion=this.resultVersion;
    if(!card||!doc||!this.visible.has(index)||this.options.removed(index))continue;
-   const angle=this.options.angle(index,this.cards.length),img=card.querySelector('img');if(img.dataset.angle===String(angle))continue;
+   const angle=this.options.angle(index,this.cards.length),img=card.querySelector('img');if(img.dataset.angle===String(angle)&&img.dataset.result===String(resultVersion))continue;
    const status=card.querySelector('.thumbnail-status');status.textContent=this.options.t('Loading preview…','Загрузка миниатюры…');
    let page,canvas;
    try{
-    page=await doc.getPage(index+1);if(version!==this.version)continue;
-    const natural=page.getViewport({scale:1,rotation:(page.rotate+angle)%360});const scale=Math.min(210/natural.width,250/natural.height);
+    const sourceIndex=this.resultDoc?this.resultMap.get(index):index;if(sourceIndex===undefined)continue;page=await doc.getPage(sourceIndex+1);if(version!==this.version)continue;
+    const natural=page.getViewport({scale:1,rotation:(page.rotate+(this.resultDoc?0:angle))%360});const scale=Math.min(210/natural.width,250/natural.height);
     if(!Number.isFinite(scale)||scale<=0)throw Error('size');
-    const viewport=page.getViewport({scale,rotation:(page.rotate+angle)%360});canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.ceil(viewport.width));canvas.height=Math.max(1,Math.ceil(viewport.height));
+    const viewport=page.getViewport({scale,rotation:(page.rotate+(this.resultDoc?0:angle))%360});canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.ceil(viewport.width));canvas.height=Math.max(1,Math.ceil(viewport.height));
     await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('blob');
-    if(version!==this.version||!this.visible.has(index)||this.cards[index]!==card||this.options.angle(index,this.cards.length)!==angle)continue;
-    this.release(card);img.dataset.url=URL.createObjectURL(blob);img.src=img.dataset.url;img.dataset.angle=String(angle);status.textContent='';
-   }catch{if(version===this.version)status.textContent=this.options.t('Preview unavailable.','Миниатюра недоступна.');}
+    if(version!==this.version||resultVersion!==this.resultVersion||!this.visible.has(index)||this.cards[index]!==card||this.options.angle(index,this.cards.length)!==angle)continue;
+    this.release(card);img.dataset.url=URL.createObjectURL(blob);img.src=img.dataset.url;img.dataset.angle=String(angle);img.dataset.result=String(resultVersion);status.textContent='';
+   }catch{if(version===this.version&&resultVersion===this.resultVersion)status.textContent=this.options.t('Preview unavailable.','Миниатюра недоступна.');}
    finally{if(canvas){canvas.width=0;canvas.height=0;}try{page?.cleanup();}catch{}}
   }}finally{this.rendering=false;}
  }

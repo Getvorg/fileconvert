@@ -8,7 +8,7 @@ const input = get('editor-file'), feedback = get('editor-feedback');
 const workspace = get('editor-workspace'), grid = get('editor-pages');
 const save = get('editor-save'), result = get('editor-result');
 const mergeMode = document.querySelector('[data-editor-mode]').dataset.editorMode === 'merge';
-let sources = [], sourceName = '';
+let sources = [], sourceName = '',nextPageId=0,insertionAfter=null,blankSource=null;
 let zoomRender = null, zoomRevision = 0, zoomFocus = null;
 let pages = [], history = [], busy = false, revision = 0, downloadUrl = null;
 let renderQueue = [], rendering = false, dragId = null;
@@ -39,8 +39,8 @@ function controls() {
  get('editor-delete-selected').disabled = busy || !selected || selected === pages.length;
  get('editor-undo').disabled = busy || !history.length;
  get('editor-reset').disabled = busy || !history.length;
- save.disabled = busy || !pages.length || (mergeMode && sources.length < 2);
- input.disabled = busy;get('editor-pick').disabled=busy;
+ save.disabled = busy || !pages.length || (mergeMode&&sources.length<2&&!pages.some(p=>p.copy||p.blank));
+ input.disabled = busy;get('editor-pick').disabled=busy;get('editor-insert-file').disabled=busy;get('editor-add-files').disabled=busy;get('editor-add-blank').disabled=busy||pages.length>=500;
  const loaded=pages.length>0&&!workspace.hidden;get('editor-dropzone').hidden=loaded;get('editor-file-help').hidden=loaded;
  for (const [id, card] of cards) {
   const index = pages.findIndex(page => page.id === id), page = pages[index];
@@ -54,6 +54,7 @@ function controls() {
   card.querySelector('[data-action=previous]').disabled = busy || index === 0;
   card.querySelector('[data-action=next]').disabled = busy || index === pages.length - 1;
   card.querySelector('[data-action=delete]').disabled = busy || pages.length === 1;
+  for(const kind of ['duplicate','blank'])card.querySelector(`[data-action=${kind}]`).disabled=busy||pages.length>=500;
   card.querySelector('.page-drag').draggable = !busy;
  }
  workspace.setAttribute('aria-busy', String(busy));
@@ -123,7 +124,7 @@ function createCard(page) {
  const label = document.createElement('label'), checkbox = document.createElement('input'); checkbox.type = 'checkbox';
  checkbox.setAttribute('aria-label', t(`Select page ${id + 1}`, `Выбрать страницу ${id + 1}`));
  checkbox.addEventListener('change', () => { if (busy) return; const current = pages.find(page => page.id === id); current.selected = checkbox.checked; controls(); });
- label.append(checkbox, document.createTextNode(t(`Page ${page.index + 1}`, `Страница ${page.index + 1}`)));
+ label.append(checkbox, document.createTextNode(page.blank?t('Blank A4','Пустая A4'):t(`Page ${page.index+1}`,`Страница ${page.index+1}`)));
  const handle = document.createElement('span'); handle.className = 'page-drag'; handle.textContent = '⠿'; handle.draggable = true;
  handle.title = t('Drag to reorder', 'Перетащите для изменения порядка'); handle.setAttribute('aria-hidden', 'true');
  handle.addEventListener('dragstart', event => {
@@ -153,7 +154,8 @@ function createCard(page) {
  const orderControls = document.createElement('details'); orderControls.className = 'page-order-controls';
  const summary = document.createElement('summary'); summary.textContent = t('Change position', 'Изменить позицию');
  orderControls.append(summary, actions, moveLabel);
- card.append(top, overlay, frame, filename, positionText, orderControls);
+ const add=document.createElement('div');add.className='card-insert-controls';add.append(button('duplicate','',t('Duplicate page','Дублировать страницу'),id),button('blank','',t('Blank A4 after page','Пустая A4 после страницы'),id),button('insert','',t('Insert files after page','Вставить файлы после страницы'),id));
+ card.append(top, overlay, frame, filename, positionText, add, orderControls);
  card.addEventListener('dragover', event => { if (dragId !== null && dragId !== id && !busy) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; card.classList.add('is-drop-target'); } });
  card.addEventListener('dragleave', event => { if (!card.contains(event.relatedTarget)) card.classList.remove('is-drop-target'); });
  card.addEventListener('drop', event => {
@@ -194,6 +196,9 @@ function act(action, id) {
  const index = pages.findIndex(page => page.id === id);
  if (index < 0) return;
  if (action === 'previous' || action === 'next') { movePage(id, index + (action === 'previous' ? -1 : 1), `[data-action=${action}]`); return; }
+ if(action==='duplicate'){if(pages.length>=500)return;remember();pages.splice(index+1,0,{...pages[index],id:nextPageId++,selected:false,copy:true});render();return;}
+ if(action==='blank'){void addBlank(id);return;}
+ if(action==='insert'){insertionAfter=id;get('editor-insert-file').click();return;}
  if (action === 'zoom') { void openZoom(id); return; }
  if (action === 'delete' && pages.length === 1) return;
  remember();
@@ -206,11 +211,11 @@ function act(action, id) {
 async function disposePreview() {
  closeZoom();
  observer.disconnect(); cards.forEach(releaseImage); cards.clear(); visible.clear(); renderQueue = []; grid.replaceChildren();
- const previous = sources; sources = [];
+ const previous = sources; sources = [];blankSource=null;nextPageId=0;
  await Promise.all(previous.map(async source => { try { await source.task.destroy(); } catch {} }));
 }
 function originalPages() {
- return sources.flatMap(source => Array.from({length:source.count}, (_,index)=>({id:source.start+index, sourceId:source.id, index, turn:0, selected:false})));
+ return sources.filter(source=>!source.synthetic).flatMap(source=>source.originalIds.map((id,index)=>({id,sourceId:source.id,index,turn:0,selected:false})));
 }
 const imageExtension = /\.(png|jpe?g|webp|gif|bmp|avif|svg|ico|tiff?|heic|heif)$/i;
 const pdfCandidate = file => /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
@@ -245,41 +250,41 @@ async function imageAsPdf(file, bytes) {
   image?.close?.();if(url)URL.revokeObjectURL(url);if(canvas){canvas.width=0;canvas.height=0;}
  }
 }
-async function loadFiles(incoming) {
+async function loadFiles(incoming,{append=mergeMode,insertAfter=null}={}) {
  const files = Array.from(incoming);
  if (busy || !files.length) return;
- if ((!mergeMode && files.length !== 1) || files.length + (mergeMode ? sources.length : 0) > 50 || files.some(file=>!file.size || !(pdfCandidate(file) || (mergeMode && imageCandidate(file)))) || files.reduce((n,f)=>n+f.size,0)+(mergeMode?sources.reduce((n,s)=>n+s.size,0):0)>50*1024*1024) {
+ if ((!append && !mergeMode && files.length!==1) || files.length + (append?sources.filter(s=>!s.synthetic).length:0) > 50 || files.some(file=>!file.size || !(pdfCandidate(file) || ((append||mergeMode)&&imageCandidate(file)))) || files.reduce((n,f)=>n+f.size,0)+(append?sources.reduce((n,s)=>n+s.size,0):0)>50*1024*1024) {
   announce(t('Choose PDFs or images up to 50 MB total, maximum 50 files. Organize accepts one PDF. Current edits have been kept.', 'Выберите PDF или изображения до 50 МБ суммарно, максимум 50 файлов. Организация принимает один PDF. Текущие изменения сохранены.')); return;
  }
  busy = true; controls(); closeZoom();
  const version = ++revision, pending = [];
- if (!mergeMode) { clearDownload(); pages=[]; history=[]; workspace.hidden=true; await disposePreview(); }
+ if (!append) { clearDownload(); pages=[]; history=[]; workspace.hidden=true; await disposePreview(); }
  announce(t('Opening PDF pages…', 'Открытие страниц PDF…'));
  try {
-  let total = sources.reduce((n,s)=>n+s.count,0);
+  let total=sources.filter(s=>!s.synthetic).reduce((n,s)=>n+s.count,0),addedCount=0;
   for (const file of files) {
    let bytes = new Uint8Array(await file.arrayBuffer()), doc;
-   if(mergeMode && !pdfCandidate(file) && imageCandidate(file)) {
+   if((append||mergeMode) && !pdfCandidate(file) && imageCandidate(file)) {
     const converted=await imageAsPdf(file,bytes);doc=converted.doc;bytes=converted.bytes;
    } else {doc=await window.PDFLib.PDFDocument.load(bytes);}
    const count = doc.getPageCount();
-   if (!count || total + count > 500) throw Error('page-limit');
+   if(!count||total+count>500||(append?pages.length:0)+addedCount+count>500) throw Error('page-limit');
    const task = pdfjs.getDocument({data:bytes, isEvalSupported:false, useSystemFonts:true, cMapUrl:'/vendor/pdfjs/cmaps/', cMapPacked:true, standardFontDataUrl:'/vendor/pdfjs/standard_fonts/', wasmUrl:'/vendor/pdfjs/wasm/'});
    const record = {id: sources.length+pending.length, doc, task, name:file.name, size:file.size, count, start:total, preview:null}; pending.push(record);
    record.preview = await task.promise;
-   total += count;
+   total += count;addedCount+=count;
   }
   if (version !== revision) return;
-  if (mergeMode && sources.length) remember();
-  const added = pending.flatMap(source=>Array.from({length:source.count},(_,index)=>({id:source.start+index, sourceId:source.id, index, turn:0, selected:false})));
-  sources.push(...pending); pages.push(...added); clearDownload(); sourceName=sources[0].name;
-  get('editor-filename').textContent = mergeMode ? t(`${sources.length} files`, `Файлов: ${sources.length}`) : sourceName;
+  if(append&&sources.length)remember();
+  const added=pending.flatMap(source=>{source.originalIds=[];return Array.from({length:source.count},(_,index)=>{const id=nextPageId++;source.originalIds.push(id);return {id,sourceId:source.id,index,turn:0,selected:false};});});
+  sources.push(...pending);const anchor=pages.findIndex(p=>p.id===insertAfter),location=insertAfter===null||anchor<0?pages.length:anchor+1;pages.splice(location,0,...added); clearDownload(); sourceName=sources[0].name;
+  get('editor-filename').textContent = mergeMode ? t(`${sources.filter(s=>!s.synthetic).length} files`, `Файлов: ${sources.filter(s=>!s.synthetic).length}`) : sourceName;
   workspace.hidden=false; render();
   cards.get(added[0]?.id)?.scrollIntoView({block:'start'});
   announce(mergeMode && sources.length<2 ? t('Add another PDF or image to merge. You can already edit its pages.', 'Добавьте ещё один PDF или изображение для объединения. Страницы уже можно редактировать.') : t('Pages are ready. Rotate, remove or drag them into the order you want.', 'Страницы готовы. Поворачивайте, удаляйте и перетаскивайте их в нужном порядке.'));
  } catch(error) {
   await Promise.all(pending.map(async source=>{try{await source.task.destroy();}catch{}}));
-  if (!mergeMode) { pages=[]; workspace.hidden=true; }
+  if(!append){pages=[];workspace.hidden=true;}
   const imageErrors={
    'image-size':t('Each image must be 20 MB or smaller.', 'Каждое изображение должно быть не больше 20 МБ.'),
    'image-pixels':t('Image exceeds the 40 megapixel limit.', 'Изображение превышает лимит 40 мегапикселей.'),
@@ -317,7 +322,7 @@ get('editor-reset').addEventListener('click', () => {
  announce(t('Original page order and rotations restored.', 'Исходный порядок и поворот страниц восстановлены.'));
 });
 save.addEventListener('click', async () => {
- if (busy || !sources.length || !pages.length || (mergeMode && sources.length < 2)) return;
+ if (busy || !sources.length || !pages.length || (mergeMode&&sources.length<2&&!pages.some(p=>p.copy||p.blank))) return;
  busy = true; clearDownload(); controls(); savePanel.begin();save.textContent = t('Saving…', 'Сохранение…'); announce(t('Creating your PDF…', 'Создание PDF…'));
  try {
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -327,7 +332,7 @@ save.addEventListener('click', async () => {
    const chosen = pages.filter(page=>page.sourceId===source.id);
    if (!chosen.length) continue;
    const copied = await output.copyPages(source.doc,chosen.map(page=>page.index));
-   copied.forEach((page,index)=>copiedById.set(chosen[index].id,page));savePanel.progress(copiedById.size,pages.length);await new Promise(resolve=>setTimeout(resolve,0));
+   copied.forEach((page,index)=>{const node=page.node.clone(),ref=output.context.register(node);copiedById.set(chosen[index].id,PDFLib.PDFPage.of(node,ref,output));});savePanel.progress(copiedById.size,pages.length);await new Promise(resolve=>setTimeout(resolve,0));
   }
   pages.forEach(entry=>{const page=copiedById.get(entry.id);page.setRotation(window.PDFLib.degrees((page.getRotation().angle+entry.turn)%360));output.addPage(page);});
   savePanel.wait(t('Writing PDF…','Запись PDF…'));
@@ -349,23 +354,13 @@ function closeZoom() {
  const canvas=get('page-preview-canvas');canvas.width=0;canvas.height=0;
  if(wasOpen && zoomFocus?.isConnected) zoomFocus.focus();
 }
-async function openZoom(id) {
- const entry=pages.find(page=>page.id===id);if(!entry)return;
- const source=sources.find(source=>source.id===entry.sourceId);
- const dialog=get('page-preview-dialog'), canvas=get('page-preview-canvas'), message=get('page-preview-status');
- const trigger=document.activeElement;closeZoom();zoomFocus=trigger;
- const version=++zoomRevision;
- get('page-preview-title').textContent=`${source.name} · ${t('Page','Страница')} ${entry.index+1}`;
- dialog.showModal();get('page-preview-close').focus();message.textContent=t('Loading preview…','Загрузка страницы…');
- try {
-  const page=await source.preview.getPage(entry.index+1);if(version!==zoomRevision)return;
-  const natural=page.getViewport({scale:1,rotation:(page.rotate+entry.turn)%360});
-  const scale=Math.min(1200/natural.width,1500/natural.height);
-  const viewport=page.getViewport({scale,rotation:(page.rotate+entry.turn)%360});canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
-  zoomRender=page.render({canvasContext:canvas.getContext('2d'),viewport});await zoomRender.promise;
-  if(version===zoomRevision)message.textContent='';
- }catch{if(version===zoomRevision)message.textContent=t('Preview unavailable.','Просмотр недоступен.');}
- finally{if(version===zoomRevision)zoomRender=null;}
+async function openZoom(id){
+ const at=pages.findIndex(page=>page.id===id);if(at<0)return;const trigger=document.activeElement;closeZoom();zoomFocus=trigger;const dialog=get('page-preview-dialog');dialog.showModal();get('page-preview-close').focus();
+ zoomRender={cancel:FileWorkspace.enhanceViewer(dialog,{entries:[...pages],start:at,render:async(entry,canvas,current,cancel,zoom)=>{
+  const source=sources.find(s=>s.id===entry.sourceId);get('page-preview-title').textContent=`${source.name} · ${t('Page','Страница')} ${entry.index+1}`;
+  const page=await source.preview.getPage(entry.index+1);if(!current())return;const rotation=(page.rotate+entry.turn)%360,natural=page.getViewport({scale:1,rotation}),scale=Math.min(1200/natural.width,1500/natural.height)*zoom;
+  if(natural.width*natural.height*scale*scale>40000000)throw Error('Preview zoom exceeds 40 MP');const viewport=page.getViewport({scale,rotation});canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);const task=page.render({canvasContext:canvas.getContext('2d'),viewport});cancel(()=>task.cancel());await task.promise;
+ }})};
 }
 get('page-preview-close').addEventListener('click',closeZoom);
 get('page-preview-dialog').addEventListener('cancel',event=>{event.preventDefault();closeZoom();});
@@ -374,3 +369,13 @@ get('page-preview-dialog').addEventListener('click',event=>{if(event.target===ge
 controls();
 
 FileWorkspace.reorder(grid,{selector:'li[data-page-id]',key:card=>Number(card.dataset.pageId),busy:()=>busy,onMove:(from,to)=>movePage(from,pages.findIndex(page=>page.id===to),'[data-action=rotate]')});
+
+get('editor-insert-file').addEventListener('change',()=>{const files=Array.from(get('editor-insert-file').files);get('editor-insert-file').value='';void loadFiles(files,{append:true,insertAfter:insertionAfter});});
+get('editor-add-files').addEventListener('click',()=>{insertionAfter=pages.at(-1)?.id??null;get('editor-insert-file').click();});
+get('editor-add-blank').addEventListener('click',()=>void addBlank(pages.at(-1)?.id));
+async function addBlank(after){
+ if(busy||pages.length>=500)return;busy=true;controls();try{
+  if(!blankSource){const doc=await PDFLib.PDFDocument.create();doc.addPage([595.28,841.89]);const task=pdfjs.getDocument({data:await doc.save(),isEvalSupported:false});blankSource={id:sources.length,doc,task,preview:await task.promise,name:t('Blank A4','Пустая A4'),count:1,size:0,synthetic:true,originalIds:[]};sources.push(blankSource);}
+  remember();const index=pages.findIndex(page=>page.id===after);pages.splice(index<0?pages.length:index+1,0,{id:nextPageId++,sourceId:blankSource.id,index:0,turn:0,selected:false,blank:true});render();
+ }catch{announce(t('Could not create blank page.','Не удалось создать пустую страницу.'));}finally{busy=false;controls();}
+}

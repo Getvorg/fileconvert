@@ -143,3 +143,15 @@ Compression defaults to the source format and quality 80% for JPEG/WebP. PNG sta
 `pdf-extras.js` implements the new PDF operations; `scripts/pdf-extra-page.mjs` supplies their controls and instructions. No new external service, font download or dependency is used. General PDF editing compatibility limits still apply: edited copies can lose document-level structures and existing digital signatures are invalidated. Inspect outputs and retain originals.
 
 `tests/advanced_tools_browser.py` independently checks number positions on rotated pages, Cyrillic and image watermark payloads, embedded-image resolution/colors, lossless text preservation, raster text removal, four conversion formats/alpha, crop presets/coordinates/drag/Undo, bilingual routes and mobile overflow.
+
+## Live results, page insertion and batch stamping
+
+Numbering and watermark tools render the actual generated PDF in thumbnails and the shared viewer before download. Drag the move handle to set a custom position, or use percentage inputs for keyboard placement. Export reuses an exact matching preview result; settings or page changes invalidate it. Generation is debounced, stale jobs are discarded, and preview failures are reported without retaining a stale result.
+
+Both tools accept multiple PDFs (50 files / 50 MB combined / 500 source pages), share stamp settings, and keep page order, deletion and rotation independently for each document. The document selector switches previews; removal supports Undo. A batch downloads as ZIP, and numbering restarts at the chosen starting number for each document. Batch output is capped at 200 MB and no partial archive is offered on failure.
+
+Merge and Organize PDF expose duplicate, blank A4 page and insert-file actions beside each page card. Insert accepts PDFs and supported browser-decodable images at the chosen position; the toolbar can also append files or blank pages. Copies have independent rotations. Active output is limited to 500 pages, including copies and blanks; Undo restores insertion and page edits.
+
+The shared PDF/image viewer offers previous/next pages, arrow-key navigation, zoom, fit and fullscreen (with an expanded-dialog fallback). Rendered previews remain limited to 40 MP. Edited PDF compatibility limits described above still apply.
+
+`tests/editor_workflow_browser.py` verifies insertion order, independent duplicate rotations, blank pages, Undo, viewer navigation/zoom/fullscreen, actual preview pixels and dragged stamp positions in exported PDFs, independent batch edits, numbering restart, watermark ZIP, EN/RU and mobile under production CSP.
