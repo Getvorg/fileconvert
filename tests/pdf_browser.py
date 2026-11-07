@@ -63,17 +63,22 @@ with sync_playwright() as p:
     page.screenshot(path='work/catalog-desktop.png',full_page=True)
     a=document(['A1','A2'],[90,0]); b=document(['B1'])
     visit('merge-pdf')
-    page.locator('#pdf-files').set_input_files(upload('a.pdf',a))
-    assert page.locator('#pdf-run').is_disabled()
-    page.locator('#pdf-files').set_input_files(upload('b.pdf',b))
-    page.get_by_role('button',name='Move up: b.pdf',exact=True).click()
-    run(); result=read(output())
+    page.locator('#editor-file').set_input_files(upload('a.pdf',a))
+    expect(page.locator('#editor-workspace')).to_be_visible()
+    assert page.locator('#editor-save').is_disabled()
+    page.locator('#editor-file').set_input_files(upload('b.pdf',b))
+    expect(page.locator('.page-card')).to_have_count(3)
+    page.locator('[data-page-id="2"] .page-order-controls').evaluate('(e)=>e.open=true')
+    position=page.locator('[data-page-id="2"] input[type=number]');position.fill('1');position.press('Tab')
+    page.locator('#editor-save').click()
+    link=page.locator('#editor-result a');expect(link).to_be_visible()
+    with page.expect_download() as info: link.click()
+    result=read(Path(info.value.path()).read_bytes())
     assert len(result)==3
     assert [x.get_text().strip() for x in result]==['B1','A1','A2']
     assert result[1].rotation==90
-    # Removing a file clears the previous result and disables merge.
-    page.get_by_role('button',name='Remove: a.pdf',exact=True).click()
-    assert page.locator('#pdf-results a').count()==0 and page.locator('#pdf-run').is_disabled()
+    page.locator('[data-page-id="0"] [data-action=delete]').click()
+    assert page.locator('#editor-result a').count()==0
     visit('split-pdf',True)
     source=document(['one','two','three'])
     page.locator('#pdf-files').set_input_files(upload('source.pdf',source))
@@ -106,9 +111,9 @@ with sync_playwright() as p:
     assert page.locator('#pdf-results a').count()==0
     assert '500 pages' in page.locator('#pdf-feedback').inner_text()
     visit('merge-pdf')
-    page.locator('#pdf-files').set_input_files([upload('a.pdf',document(['A']*300)),upload('b.pdf',document(['B']*201))])
-    run();assert page.locator('#pdf-results a').count()==0
-    assert '500 pages' in page.locator('#pdf-feedback').inner_text()
+    page.locator('#editor-file').set_input_files([upload('a.pdf',document(['A']*300)),upload('b.pdf',document(['B']*201))])
+    expect(page.locator('#editor-feedback')).to_contain_text('500 pages')
+    assert page.locator('#editor-result a').count()==0
     visit('jpg-to-pdf')
     image=io.BytesIO();Image.new('RGB',(120,80),'red').save(image,format='JPEG')
     page.locator('#pdf-files').set_input_files([upload('red.jpg',image.getvalue(),'image/jpeg'),upload('red2.jpg',image.getvalue(),'image/jpeg')])

@@ -103,7 +103,9 @@ with sync_playwright() as p:
     page.set_viewport_size({'width':375,'height':812})
     open_file(source,ru=True)
     thumb(0)
+    card(0).locator('.page-order-controls').evaluate('(e)=>e.open=true')
     card(0).locator('[data-action=next]').click();assert order()==[1,0,2,3]
+    card(3).locator('.page-order-controls').evaluate('(e)=>e.open=true')
     position=card(3).locator('input[type=number]');position.fill('1');position.press('Tab')
     assert order()==[3,1,0,2]
     position=card(3).locator('input[type=number]');position.fill('9');position.press('Tab')

@@ -21,6 +21,7 @@ python tests/browser.py
 # PDF integration checks additionally require PyMuPDF and Pillow:
 python tests/pdf_browser.py
 python tests/organizer_browser.py
+python tests/merge_visual_browser.py
 ```
 
 Browser checks require the local server, use `/usr/bin/chromium`, and save a screenshot in `work/`.
@@ -48,7 +49,7 @@ To build elsewhere, provide the same variables and upload only `dist/`. Configur
 ## Roadmap
 
 1. **Delivered:** distinct JPG → PNG / PNG → JPG pages, EN/RU URLs, instructions, About, Contact, Privacy, production SEO generation and static hosting configuration.
-2. **Delivered:** filterable tool cards, grouped top navigation, JPG → PDF with original/A4 pages, PDF merge with file reordering, split/extraction with inclusive page ranges or one file per page, relative clockwise PDF rotation. PDF processing uses locally bundled pdf-lib 1.17.1 (MIT license copied to `/vendor/pdf-lib.LICENSE.md`). Add tools in `scripts/catalog.mjs` to extend the directory and navigation.
+2. **Delivered:** filterable tool cards, grouped top navigation, JPG → PDF with original/A4 pages, visual PDF merge with page reordering, split/extraction with inclusive page ranges or one file per page, relative clockwise PDF rotation. PDF processing uses locally bundled pdf-lib 1.17.1 (MIT license copied to `/vendor/pdf-lib.LICENSE.md`). Add tools in `scripts/catalog.mjs` to extend the directory and navigation.
 3. **Delivered:** visual PDF page organizer (`/organize-pdf/`, `/ru/organize-pdf/`), lazy thumbnails, drag reorder, keyboard/mobile position controls, individual and bulk deletion/rotation, 30-step undo and reset. Links are available from existing PDF tools.
 4. **Next:** PNG → PDF.
 5. **Then:** PDF → images, image extraction, watermarks and page numbers, with browser integration tests.
@@ -68,10 +69,12 @@ The screenshot is a long-term tool catalog, not a list of currently supported fe
 
 ## Visual page organizer
 
-One source PDF, up to 50 MB and 500 pages. Page labels retain their original numbers, while position labels show the output order. At least one page must remain. Selection alone does not change the output; delete and rotate actions affect selected pages. Reset restores the original order/rotation and can itself be undone. Only the 30 most recent editing states are kept.
+Organize accepts one source PDF. Merge accepts 2–50 PDFs, with additional files appended on later selections. Both tools share the same thumbnail-card workspace, with a magnifier preview, clockwise rotate and delete controls on each card. Limits are 50 MB and 500 original pages across all loaded sources (deleted pages do not free that import limit). Page labels retain their original numbers, while position labels show the output order. At least one page must remain. Selection alone does not change the output; delete and rotate actions affect selected pages. Reset restores the original order/rotation across all imported documents and can itself be undone. Only the 30 most recent editing states are kept.
 
-PDF.js 6.5.438 (Apache-2.0) renders thumbnails in a local worker. Worker, fonts, CMaps, WASM decoders and licenses are published under `/vendor/pdfjs/`. Only the page organizer loads PDF.js; other tools keep their previous loading behavior. The CSP allows same-origin workers and WebAssembly compilation (`wasm-unsafe-eval`), without permitting JavaScript eval or remote scripts. Preview rendering disables PDF.js eval support and does not run document scripts or create interactive PDF annotation links.
+PDF.js 6.5.438 (Apache-2.0) renders thumbnails in a local worker. Worker, fonts, CMaps, WASM decoders and licenses are published under `/vendor/pdfjs/`. Only visual merge and the page organizer load PDF.js; other tools keep their previous loading behavior. The CSP allows same-origin workers and WebAssembly compilation (`wasm-unsafe-eval`), without permitting JavaScript eval or remote scripts. Preview rendering disables PDF.js eval support and does not run document scripts or create interactive PDF annotation links.
 
-Thumbnails render sequentially near the viewport. Offscreen image URLs are released; undo history stores page indices, rotations and selections rather than copies of the source PDF. Download links are invalidated after content changes. Selecting a new PDF clears edits to the previous document; malformed, encrypted and over-limit documents cannot be exported.
+Thumbnails render sequentially near the viewport. Offscreen image URLs are released; undo history stores page indices, rotations and selections rather than copies of the source PDF. Download links are invalidated after content changes. In organize mode, selecting a new PDF clears edits to the previous document; in merge mode, successful imports append pages and failed batches preserve prior files and edits; malformed, encrypted and over-limit documents cannot be exported.
 
 `tests/organizer_browser.py` checks real painted previews with production CSP, drag ordering, page/selection edits, undo/reset, independent parsing of saved PDF text and rotations, error recovery, mobile controls, lazy rendering and local asset requests. Modern browsers supporting module workers and the current PDF.js runtime are required. Preview/export fidelity for complex documents can vary; retain the original.
+
+The page-card magnifier opens a native modal dialog with a larger rendered page, an accessible close button and Escape support. Page ordering controls remain available under each card’s Change position disclosure. On phones, card controls remain visible. `tests/merge_visual_browser.py` verifies multi-file imports/appends, cross-document ordering, individual page rotation/deletion, atomic failed batches, modal focus and independently parsed PDF output.
