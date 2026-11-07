@@ -53,6 +53,7 @@ with sync_playwright() as p:
    first=page.locator('[data-preview-page="1"]');first.scroll_into_view_if_needed()
    expect(first.locator('img')).to_have_attribute('data-angle','90' if slug=='rotate-pdf' else '0')
    if slug=='split-pdf':
+    page.locator('#split-mode').select_option('range')
     first.locator('input[type=checkbox]').uncheck()
     expect(page.locator('#page-range')).to_have_value('2,3')
     doc=output();assert [p.get_text().strip() for p in doc]==['TWO','THREE']

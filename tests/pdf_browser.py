@@ -2,6 +2,7 @@
 Run npm run build and npm start before this script.
 """
 import io
+import zipfile
 import tomllib
 from pathlib import Path
 import fitz
@@ -38,7 +39,8 @@ with sync_playwright() as p:
         assert page.locator('h1').count()==1
     def run():
         page.locator('#pdf-run').click()
-        expect(page.locator('#pdf-run')).to_have_text('Create PDF' if page.locator('html').get_attribute('lang')=='en' else 'Создать PDF')
+        split=page.locator('[data-pdf-tool]').get_attribute('data-pdf-tool')=='split-pdf'
+        expect(page.locator('#pdf-run')).to_have_text(('Split PDF' if split else 'Create PDF') if page.locator('html').get_attribute('lang')=='en' else ('Разделить PDF' if split else 'Создать PDF'))
     def output(index=0):
         link=page.locator('#pdf-results a').nth(index)
         expect(link).to_be_visible()
@@ -80,6 +82,7 @@ with sync_playwright() as p:
     page.locator('[data-page-id="0"] [data-action=delete]').click()
     assert page.locator('#editor-result a').count()==0
     visit('split-pdf',True)
+    page.locator('#split-mode').select_option('range')
     source=document(['one','two','three'])
     page.locator('#pdf-files').set_input_files(upload('source.pdf',source))
     page.locator('#page-range').fill('3,1-2,3')
@@ -90,8 +93,10 @@ with sync_playwright() as p:
     assert 'Диапазон' in page.locator('#pdf-feedback').inner_text()
     page.locator('#split-mode').select_option('each')
     assert page.locator('#range-settings').is_hidden()
-    run(); assert page.locator('#pdf-results a').count()==3
-    assert read(output(1))[0].get_text().strip()=='two'
+    run(); assert page.locator('#pdf-results a').count()==1
+    archive=zipfile.ZipFile(io.BytesIO(output()))
+    assert len(archive.namelist())==3
+    assert read(archive.read('page-002.pdf'))[0].get_text().strip()=='two'
     visit('rotate-pdf')
     page.locator('#pdf-files').set_input_files(upload('a.pdf',a))
     page.locator('#page-range').fill('1');page.locator('#rotation').select_option('180')

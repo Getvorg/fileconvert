@@ -13,6 +13,8 @@ const template = fs.readFileSync('templates/converter.html','utf8');
 fs.rmSync('dist',{recursive:true,force:true}); fs.mkdirSync('dist');
 for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js','pdf-thumbnails.js']) fs.copyFileSync(file,`dist/${file}`);
 fs.mkdirSync('dist/vendor');
+fs.copyFileSync('node_modules/fflate/esm/browser.js','dist/vendor/fflate.mjs');
+fs.copyFileSync('node_modules/fflate/LICENSE','dist/vendor/fflate.LICENSE');
 fs.copyFileSync('node_modules/pdf-lib/dist/pdf-lib.min.js', 'dist/vendor/pdf-lib.min.js');
 fs.copyFileSync('node_modules/pdf-lib/LICENSE.md', 'dist/vendor/pdf-lib.LICENSE.md');
 fs.mkdirSync('dist/vendor/pdfjs');

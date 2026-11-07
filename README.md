@@ -4,7 +4,7 @@ Static bilingual (EN/RU) PDF and image tools with a grouped directory and top na
 
 ## Development
 
-Requires Node.js 22.13+ and Python 3. The pinned pdf-lib and PDF.js dependencies are bundled locally; no runtime CDN is used.
+Requires Node.js 22.13+ and Python 3. The pinned pdf-lib, PDF.js and fflate dependencies are bundled locally; no runtime CDN is used.
 
 ```sh
 npm ci
@@ -24,6 +24,7 @@ python tests/organizer_browser.py
 python tests/merge_visual_browser.py
 python tests/mixed_merge_browser.py
 python tests/preview_stage_browser.py
+python tests/page_actions_zip_browser.py
 ```
 
 Browser checks require the local server, use `/usr/bin/chromium`, and save a screenshot in `work/`.
@@ -65,7 +66,7 @@ The screenshot is a long-term tool catalog, not a list of currently supported fe
 
 ## PDF limits and checks
 
-50 MB input total, 50 files, 500 pages per source and output. JPG input additionally has a 20 MB / 40 MP limit. Processing runs on the browser main thread and can take time on large documents; controls are locked while processing. Split-every-page produces individual download links, not a ZIP. Encrypted PDFs are rejected without bypassing encryption. Page copying may omit bookmarks, attachments, interactive forms and document-level data; digital signatures are invalidated by edits. JPG images retain their encoded orientation (EXIF orientation is not applied). Always verify the output and keep originals.
+50 MB input total, 50 files, 500 pages per source and output. JPG input additionally has a 20 MB / 40 MP limit. Processing runs on the browser main thread and can take time on large documents; controls are locked while processing. Split-every-page is the default and produces a ZIP archive containing one PDF per remaining page. Encrypted PDFs are rejected without bypassing encryption. Page copying may omit bookmarks, attachments, interactive forms and document-level data; digital signatures are invalidated by edits. JPG images retain their encoded orientation (EXIF orientation is not applied). Always verify the output and keep originals.
 
 `tests/pdf_browser.py` verifies the actual downloaded PDF files using an independent parser (PyMuPDF), including page text/order, inherited rotations, image embedding and A4 size, plus error handling, catalog filters, navigation, mobile overflow and absence of external browser requests.
 
@@ -94,3 +95,11 @@ All seven tool pages now replace their large upload prompt with previews after s
 Split and rotate use `pdf-thumbnails.js`, which renders selected PDFs lazily with PDF.js and releases offscreen blob URLs. Checkbox selection and the page-range input stay synchronized. An empty range means all pages; at least one checkbox remains selected. Split-every-page disables subset selection. Rotate previews include the original page rotation plus the selected output angle, matching the saved PDF. Replacing/removing the PDF destroys the previous preview document; preview failures do not bypass conversion validation.
 
 `tests/preview_stage_browser.py` exercises all seven tools in both languages: upload/previews occupying the same stage, restoration/replacement, painted thumbnails, visual range selection, rotation/output agreement and mobile overflow.
+
+## Per-card actions and split ZIP
+
+All tool previews expose rotation and removal. JPG/PNG image converters apply the preview rotation to actual saved pixels; JPG → PDF keeps JPEG data and applies per-page PDF rotation. Split/rotate cards expose additional clockwise quarter turns and soft deletion, with Reset page edits restoring them. At least one PDF page must remain. Deleted pages are excluded from exported PDFs and ZIP files. In the rotate tool, card rotations add to the global rotation applied to the selected pages; previews and output use the same sum.
+
+Split defaults to one PDF per remaining page inside a ZIP (`page-001.pdf`, `page-003.pdf`, etc., retaining original page numbers). Range extraction into a single PDF remains available. fflate 0.8.2 is bundled locally under `/vendor/fflate.mjs` with its MIT license. ZIP entries use fixed ASCII names and no directory components. ZIP creation uses store mode (level 0), since PDF streams are already compressed. All per-page PDFs and the final archive are built in browser memory, so large documents can reach device limits.
+
+`tests/page_actions_zip_browser.py` opens the downloaded archive with Python zipfile, checks integrity/entry names, independently parses every page, verifies saved rotations/deletions and image dimensions, and covers reset/last-page behavior, EN/RU and mobile layout.

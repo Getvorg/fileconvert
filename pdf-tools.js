@@ -1,3 +1,4 @@
+import {zipSync} from '/vendor/fflate.mjs';
 import {PDFThumbnails} from './pdf-thumbnails.js';
 'use strict';
 (() => {
@@ -9,13 +10,18 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  const input=get('pdf-files'), run=get('pdf-run'), list=get('pdf-file-list'), feedback=get('pdf-feedback'), results=get('pdf-results');
  const MAX_TOTAL=50*1024*1024;
  let files=[], urls=[], busy=false, previewFile=null;
- const imageUrls=new Map();
+ const imageUrls=new Map(), imageTurns=new Map(), pageTurns=new Map(), removedPages=new Set();
+ const turn=index=>pageTurns.get(index)||0;
+ const remaining=count=>Array.from({length:count},(_,i)=>i).filter(i=>!removedPages.has(i));
  function selectedPages(count){try{return new Set(indices(count));}catch{return new Set();}}
  const previews=jpg?null:new PDFThumbnails(get('pdf-page-previews'),{
   t:tr,
-  selection:count=>split&&get('split-mode').value==='each'?new Set(Array.from({length:count},(_,i)=>i)):selectedPages(count),
+  selection:count=>split&&get('split-mode').value==='each'?new Set(remaining(count)):selectedPages(count),
   disabled:()=>busy||(split&&get('split-mode').value==='each'),
-  angle:(index,count)=>tool==='rotate-pdf'&&selectedPages(count).has(index)?Number(get('rotation').value):0,
+  busy:()=>busy,removed:index=>removedPages.has(index),
+  angle:(index,count)=>(turn(index)+(tool==='rotate-pdf'&&selectedPages(count).has(index)?Number(get('rotation').value):0))%360,
+  onRotate:index=>{pageTurns.set(index,(turn(index)+90)%360);invalidate();},
+  onDelete:(index,count)=>{if(remaining(count).length<=1)return;removedPages.add(index);if(get('page-range').value.trim()&&!selectedPages(count).size)get('page-range').value='';invalidate();},
   onToggle:(index,count)=>{
    if(busy)return;
    const selected=selectedPages(count);
@@ -29,18 +35,18 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   list.replaceChildren();
   const loaded=files.length>0;
   get('pdf-dropzone').hidden=loaded;get('selection-help').hidden=loaded;get('pdf-stage-controls').hidden=!loaded;
-  get('pdf-pick').disabled=busy;if(get('pdf-clear'))get('pdf-clear').disabled=busy;
+  get('pdf-pick').disabled=busy;if(get('pdf-reset-pages'))get('pdf-reset-pages').disabled=busy;if(get('pdf-clear'))get('pdf-clear').disabled=busy;
   list.hidden=!loaded;
   get('pdf-page-previews').hidden=jpg||!loaded;
-  for(const [file,url] of imageUrls){if(!files.includes(file)){URL.revokeObjectURL(url);imageUrls.delete(file);}}
-  if(previews && files[0]!==previewFile){previewFile=files[0];void previews.setFile(previewFile);}
+  for(const [file,url] of imageUrls){if(!files.includes(file)){URL.revokeObjectURL(url);imageUrls.delete(file);imageTurns.delete(file);}}
+  if(previews && files[0]!==previewFile){previewFile=files[0];removedPages.clear();pageTurns.clear();void previews.setFile(previewFile);}
   previews?.refresh();
   files.forEach((file,index)=>{
    const item=document.createElement('li'), label=document.createElement('span');
    label.textContent=`${file.name} · ${(file.size/1024/1024).toFixed(2)} MB`;
    if(jpg){
     if(!imageUrls.has(file))imageUrls.set(file,URL.createObjectURL(file));
-    const frame=document.createElement('div');frame.className='page-thumbnail';
+    const frame=document.createElement('div');frame.className='page-thumbnail turn-'+(imageTurns.get(file)||0);
     const img=document.createElement('img');img.src=imageUrls.get(file);img.alt=tr(`Preview: ${file.name}`,`Миниатюра: ${file.name}`);img.loading='lazy';frame.append(img);item.append(frame);
    }
    item.append(label);
@@ -48,6 +54,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
    for(const [text,description,action,disabled] of [
     ['↑',tr('Move up','Переместить выше'),()=>{[files[index-1],files[index]]=[files[index],files[index-1]];},index===0],
     ['↓',tr('Move down','Переместить ниже'),()=>{[files[index+1],files[index]]=[files[index],files[index+1]];},index===files.length-1],
+    ['↻',tr('Rotate','Повернуть'),()=>imageTurns.set(file,((imageTurns.get(file)||0)+90)%360),false],
     ['×',tr('Remove','Удалить'),()=>files.splice(index,1),false]
    ]) {
     const button=document.createElement('button');button.type='button';button.textContent=text;
@@ -70,6 +77,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   files=next;render();
  }
  input.addEventListener('change',()=>{addFiles(input.files);input.value='';});
+ get('pdf-reset-pages')?.addEventListener('click',()=>{if(busy)return;removedPages.clear();pageTurns.clear();get('page-range').value='';invalidate();previews?.refresh();});
  get('pdf-pick').addEventListener('click',()=>input.click());
  get('pdf-clear')?.addEventListener('click',()=>{if(busy)return;files=[];invalidate();render();get('pdf-dropzone').focus();});
  const drop=get('pdf-dropzone');
@@ -81,7 +89,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  get('split-mode')?.addEventListener('change',()=>{get('range-settings').hidden=get('split-mode').value==='each';previews?.refresh();});
  function indices(count) {
   const value=get('page-range').value.trim();
-  if(!value) return Array.from({length:count},(_,i)=>i);
+  if(!value)return remaining(count);
   const chosen=new Set();
   for(const part of value.split(',')) {
    const match=/^\s*(\d+)\s*(?:-\s*(\d+)\s*)?$/.exec(part);
@@ -90,10 +98,12 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
    if(first<1||last<first||last>count) throw Error(tr(`Page range must be between 1 and ${count}.`,`Диапазон страниц должен быть от 1 до ${count}.`));
    for(let n=first;n<=last;n++) chosen.add(n-1);
   }
-  return [...chosen];
+  const result=[...chosen].filter(i=>!removedPages.has(i));
+  if(!result.length)throw Error(tr('Select at least one remaining page.','Выберите хотя бы одну оставшуюся страницу.'));
+  return result;
  }
- function download(bytes,name) {
-  const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));urls.push(url);
+ function download(bytes,name,mime='application/pdf') {
+  const url=URL.createObjectURL(new Blob([bytes],{type:mime}));urls.push(url);
   const link=document.createElement('a');link.href=url;link.download=name;link.className='download-button';link.textContent=`↓ ${name}`;results.append(link);
  }
  async function loadPdf(file) {
@@ -115,7 +125,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
    if(image.width*image.height>40000000) throw Error(tr('JPG exceeds the 40 megapixel limit.','JPG превышает лимит 40 мегапикселей.'));
    const a4=get('page-size').value==='a4', width=a4?595.28:image.width, height=a4?841.89:image.height;
    const page=doc.addPage([width,height]), scale=a4?Math.min((width-48)/image.width,(height-48)/image.height):1;
-   page.drawImage(image,{x:(width-image.width*scale)/2,y:(height-image.height*scale)/2,width:image.width*scale,height:image.height*scale});
+   page.drawImage(image,{x:(width-image.width*scale)/2,y:(height-image.height*scale)/2,width:image.width*scale,height:image.height*scale});page.setRotation(PDFLib.degrees(imageTurns.get(file)||0));
   }
   return doc.save();
  }
@@ -131,20 +141,27 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
    download(await output.save(),'merged.pdf');return;
   }
   const source=await loadPdf(files[0]), base=files[0].name.replace(/\.pdf$/i,'');
+  const applyTurn=(page,index)=>page.setRotation(PDFLib.degrees((page.getRotation().angle+turn(index))%360));
   if(split&&get('split-mode').value==='each') {
-   for(let index=0;index<source.getPageCount();index++) {
-    const output=await PDFLib.PDFDocument.create(), [page]=await output.copyPages(source,[index]);output.addPage(page);
-    download(await output.save(),`${base}-page-${index+1}.pdf`);
+   const archive=Object.create(null);
+   // Simple ASCII entry names are safe on every ZIP extractor; original page numbers stay stable.
+   for(const index of remaining(source.getPageCount())) {
+    const output=await PDFLib.PDFDocument.create(), [page]=await output.copyPages(source,[index]);applyTurn(page,index);output.addPage(page);
+    archive[`page-${String(index+1).padStart(3,'0')}.pdf`]=await output.save();
    }
+   download(zipSync(archive,{level:0}),`${base}-pages.zip`,'application/zip');
   } else if(split) {
-   const output=await PDFLib.PDFDocument.create(), pages=await output.copyPages(source,indices(source.getPageCount()));
-   pages.forEach(page=>output.addPage(page));download(await output.save(),`${base}-extracted.pdf`);
+   const chosen=indices(source.getPageCount());
+   const output=await PDFLib.PDFDocument.create(), pages=await output.copyPages(source,chosen);
+   pages.forEach((page,index)=>{applyTurn(page,chosen[index]);output.addPage(page);});download(await output.save(),`${base}-extracted.pdf`);
   } else {
-   const angle=Number(get('rotation').value);
-   indices(source.getPageCount()).forEach(index=>{const page=source.getPage(index);page.setRotation(PDFLib.degrees((page.getRotation().angle+angle)%360));});
+   const angle=Number(get('rotation').value), selected=new Set(indices(source.getPageCount()));
+   for(const index of remaining(source.getPageCount())){const page=source.getPage(index);page.setRotation(PDFLib.degrees((page.getRotation().angle+turn(index)+(selected.has(index)?angle:0))%360));}
+   [...removedPages].sort((a,b)=>b-a).forEach(index=>source.removePage(index));
    download(await source.save(),`${base}-rotated.pdf`);
   }
  }
+ if(split)get('range-settings').hidden=get('split-mode').value==='each';
  run.addEventListener('click',async()=>{
   if(busy||run.disabled) return;
   busy=true;invalidate();
@@ -155,7 +172,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
    await new Promise(resolve=>setTimeout(resolve,0));
    await processPdf();feedback.textContent=tr('Ready. Download and check your files.','Готово. Скачайте и проверьте файлы.');
   }catch(error){clearResults();feedback.textContent=error.message||tr('Could not process these files. Try a smaller document.','Не удалось обработать файлы. Попробуйте документ меньшего размера.');}
-  finally{busy=false;root.removeAttribute('aria-busy');root.querySelectorAll('input,select').forEach(control=>control.disabled=false);run.textContent=tr('Create PDF','Создать PDF');render();if(results.firstElementChild) results.firstElementChild.focus();}
+  finally{busy=false;root.removeAttribute('aria-busy');root.querySelectorAll('input,select').forEach(control=>control.disabled=false);run.textContent=split?tr('Split PDF','Разделить PDF'):tr('Create PDF','Создать PDF');render();if(results.firstElementChild) results.firstElementChild.focus();}
  });
  window.addEventListener('pagehide',clearResults);
 })();

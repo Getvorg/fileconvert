@@ -26,18 +26,32 @@ export class PDFThumbnails {
     const frame=document.createElement('div');frame.className='page-thumbnail';
     const img=document.createElement('img');img.alt=this.options.t(`Preview of page ${index+1}`,`Миниатюра страницы ${index+1}`);
     const status=document.createElement('span');status.className='thumbnail-status';frame.append(img,status);
-    card.append(label,frame);this.cards.push(card);this.container.append(card);this.observer.observe(card);
+    const actions=document.createElement('div');actions.className='page-overlay';
+    for(const [action,text,title] of [['rotate','↻',this.options.t('Rotate page','Повернуть страницу')],['delete','×',this.options.t('Delete page','Удалить страницу')]]){
+     const button=document.createElement('button');button.type='button';button.textContent=text;button.dataset.action=action;button.title=title;button.setAttribute('aria-label',`${title} ${index+1}`);
+     button.addEventListener('click',()=>{if(this.options.busy())return;action==='rotate'?this.options.onRotate(index):this.options.onDelete(index,doc.numPages);this.refresh();});actions.append(button);
+    }
+    card.append(label,actions,frame);this.cards.push(card);this.container.append(card);this.observer.observe(card);
    }
    this.refresh();
   }catch{if(version===this.version){this.container.replaceChildren();const message=document.createElement('p');message.textContent=this.options.t('Preview unavailable. Check that the PDF is not encrypted or damaged.','Миниатюры недоступны. Проверьте, что PDF не зашифрован и не повреждён.');this.container.append(message);}}
  }
- refresh(){const selected=this.options.selection(this.cards.length);for(let index=0;index<this.cards.length;index++){const card=this.cards[index], checkbox=card.querySelector('input');checkbox.checked=selected.has(index);checkbox.disabled=this.options.disabled();card.classList.toggle('is-selected',checkbox.checked);if(this.visible.has(index))this.enqueue(index);}}
+ refresh(){
+  const count=this.cards.length, selected=this.options.selection(count), remaining=this.cards.filter((_,i)=>!this.options.removed(i)).length;
+  for(let index=0;index<count;index++){
+   const card=this.cards[index], removed=this.options.removed(index), checkbox=card.querySelector('input');card.hidden=removed;
+   checkbox.checked=selected.has(index);checkbox.disabled=this.options.disabled();card.classList.toggle('is-selected',checkbox.checked);
+   card.querySelector('[data-action=rotate]').disabled=this.options.busy();card.querySelector('[data-action=delete]').disabled=this.options.busy()||remaining<=1;
+   if(removed){this.visible.delete(index);this.release(card);}else if(this.visible.has(index))this.enqueue(index);
+  }
+ }
+
  enqueue(index){if(!this.queue.includes(index))this.queue.push(index);void this.render();}
  async render(){
   if(this.rendering)return;this.rendering=true;
   try{while(this.queue.length){
    const index=this.queue.shift(), card=this.cards[index], doc=this.doc, version=this.version;
-   if(!card||!doc||!this.visible.has(index))continue;
+   if(!card||!doc||!this.visible.has(index)||this.options.removed(index))continue;
    const angle=this.options.angle(index,this.cards.length),img=card.querySelector('img');if(img.dataset.angle===String(angle))continue;
    const status=card.querySelector('.thumbnail-status');status.textContent=this.options.t('Loading preview…','Загрузка миниатюры…');
    let page,canvas;

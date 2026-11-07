@@ -12,6 +12,7 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
+    "fflate": "0.8.2",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "6.5.438"
   }
