@@ -14,3 +14,5 @@
 .modal-open{overflow:hidden}
 @keyframes modalPop{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 @media(prefers-reduced-motion:reduce){.modal-panel{animation:none}}
+
+nav{display:flex;justify-content:center;flex-wrap:wrap;gap:12px 24px;padding:17px 20px;background:#fff}nav a,.language-link,.content-guide a,.legal a{color:#b93745;text-underline-offset:4px}nav a{font-size:14px;text-decoration:none}nav a:hover{text-decoration:underline}.language-link{font-size:14px}.mode-tab{text-align:center;text-decoration:none}.content-guide,.legal{line-height:1.8}.content-guide{margin:40px 0;padding:25px;background:white;border:1px solid #e8ebf4;border-radius:14px}.content-guide h2,.legal h2{font-size:22px;line-height:1.4}.content-guide li{margin:10px 0}.legal{min-height:65vh;padding-top:36px;padding-bottom:60px}.legal h1{font-size:36px}footer nav{background:transparent}a:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid #b93745;outline-offset:4px}

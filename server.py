@@ -1,10 +1,12 @@
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-import os
+from functools import partial
 
 if __name__ == "__main__":
-    os.chdir(Path(__file__).resolve().parent)
-    with ThreadingHTTPServer(("127.0.0.1", 8000), SimpleHTTPRequestHandler) as server:
+    root = Path(__file__).resolve().parent / "dist"
+    if not root.exists():
+        raise SystemExit("Run npm run build first")
+    with ThreadingHTTPServer(("127.0.0.1", 8000), partial(SimpleHTTPRequestHandler, directory=str(root))) as server:
         print("Open http://127.0.0.1:8000 in your browser")
         try:
             server.serve_forever()

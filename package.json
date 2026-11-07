@@ -1,0 +1,1 @@
+{"name":"fileconvert","version":"1.0.0","private":true,"type":"module","scripts":{"build":"node scripts/build.mjs","start":"python server.py","check":"node --check app.js && node --check scripts/build.mjs"},"engines":{"node":">=22"}}

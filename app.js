@@ -5,7 +5,8 @@ const translations = {
 };
 const MAX_SIZE = 20 * 1024 * 1024;
 let mode = 'jpg-png';
-let lang = localStorage.getItem('fileconvert_lang') === 'ru' ? 'ru' : 'en';
+let lang = document.body.dataset.language === 'ru' ? 'ru' : 'en';
+let selectionVersion = 0;
 let currentFile = null;
 let previewUrl = null;
 let downloadUrl = null;
@@ -28,12 +29,12 @@ function openModal() {
 const el = id => document.getElementById(id);
 const t = key => translations[lang][key];
 function setLanguage(next) {
-  lang = next; localStorage.setItem('fileconvert_lang', lang);
+  lang = next;
   document.documentElement.lang = lang; el('language').value = lang;
   document.querySelectorAll('[data-i18n]').forEach(element => { element.textContent = t(element.dataset.i18n); });
   el('dropHelp').textContent = t(mode === 'jpg-png' ? 'dropHintJpg' : 'dropHintPng');
   el('convert').textContent = t(mode === 'jpg-png' ? 'convertJpg' : 'convertPng');
-  document.title = lang === 'ru' ? 'FileConvert — конвертер JPG и PNG' : 'FileConvert — JPG & PNG Converter';
+  document.title = document.body.dataset.pageTitle || (lang === 'ru' ? 'FileConvert — конвертер JPG и PNG' : 'FileConvert — JPG & PNG Converter');
   if (downloadUrl) el('feedback').textContent = t('ready');
 }
 function clearOutput() {
@@ -43,7 +44,7 @@ function clearOutput() {
   el('feedback').textContent = '';
 }
 function clearFile() {
-  currentFile = null; el('file').value = '';
+  selectionVersion++; currentFile = null; el('file').value = '';
   if (previewUrl) URL.revokeObjectURL(previewUrl);
   previewUrl = null; el('preview').removeAttribute('src');
   el('fileDetails').hidden = true; el('convert').disabled = true; clearOutput();
@@ -61,11 +62,13 @@ function selectFile(file) {
   const valid = mode === 'jpg-png' ? file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name) : file.type === 'image/png' || /\.png$/i.test(file.name);
   if (!valid) { el('feedback').textContent = t('errorType'); return; }
   if (file.size > MAX_SIZE) { el('feedback').textContent = t('errorSize'); return; }
-  previewUrl = URL.createObjectURL(file);
+  const version = selectionVersion;
+  const selectedUrl = URL.createObjectURL(file);
+  previewUrl = selectedUrl;
   const img = new Image();
-  img.onload = () => { currentFile = file; el('preview').src = previewUrl; el('fileName').textContent = file.name; el('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB'; el('fileDetails').hidden = false; el('convert').disabled = false; };
-  img.onerror = () => { clearFile(); el('feedback').textContent = t('errorOpen'); };
-  img.src = previewUrl;
+  img.onload = () => { if (version !== selectionVersion) return; currentFile = file; el('preview').src = previewUrl; el('fileName').textContent = file.name; el('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB'; el('fileDetails').hidden = false; el('convert').disabled = false; };
+  img.onerror = () => { if (version !== selectionVersion) return; clearFile(); el('feedback').textContent = t('errorOpen'); };
+  img.src = selectedUrl;
 }
 function convert() {
   if (!currentFile || !previewUrl) return;
@@ -76,15 +79,15 @@ function convert() {
     try {
       const canvas = document.createElement('canvas');
       canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
-      if (!canvas.width || !canvas.height) throw Error('Empty image');
+      if (!canvas.width || !canvas.height || canvas.width * canvas.height > 40000000) throw Error('Empty image');
       const ctx = canvas.getContext('2d');
       if (!ctx) throw Error('Canvas unavailable');
       if (selectedMode === 'png-jpg') { ctx.fillStyle = el('background').value; ctx.fillRect(0,0,canvas.width,canvas.height); }
       ctx.drawImage(image,0,0);
       const mime = selectedMode === 'jpg-png' ? 'image/png' : 'image/jpeg';
       canvas.toBlob(blob => {
-        el('convert').disabled = false; el('convert').textContent = t(selectedMode === 'jpg-png' ? 'convertJpg' : 'convertPng');
         if (mode !== selectedMode || currentFile !== file) return;
+        el('convert').disabled = false; el('convert').textContent = t(selectedMode === 'jpg-png' ? 'convertJpg' : 'convertPng');
         if (!blob) { el('feedback').textContent = t('errorConvert'); return; }
         downloadUrl = URL.createObjectURL(blob);
         const ext = selectedMode === 'jpg-png' ? 'png' : 'jpg';
@@ -127,5 +130,5 @@ document.addEventListener('keydown', event => {
     else if (!event.shiftKey && i === controls.length - 1) { event.preventDefault(); controls[0].focus(); }
   }
 });
-el('year').textContent = new Date().getFullYear();
-setMode('jpg-png');
+if (el('year')) el('year').textContent = new Date().getFullYear();
+setMode(document.body.dataset.mode === 'png-jpg' ? 'png-jpg' : 'jpg-png');
