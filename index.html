@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Convert JPG to PNG and PNG to JPG for free, privately in your browser. No uploads needed.">
+  <title>FileConvert — JPG & PNG Converter</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="brand" aria-label="FileConvert home"><span class="brand-icon">↔</span> File<span>Convert</span></a>
+    <div class="header-right"><span class="header-hint" data-i18n="headerHint">Free image converter</span><div class="language-control"><label for="language" class="sr-only">Language / Язык</label><select id="language"><option value="en">English</option><option value="ru">Русский</option></select></div></div>
+  </header>
+  <main>
+    <section class="hero">
+      <span class="eyebrow" data-i18n="eyebrow">FREE · PRIVATE · FAST</span>
+      <h1 data-i18n="title">Convert JPG & PNG online</h1>
+      <p class="subtitle" data-i18n="subtitle">Quick image conversion right in your browser. Your files never leave your device.</p>
+    </section>
+    <section class="converter" aria-labelledby="converterHeading">
+      <div class="converter-top"><div><h2 id="converterHeading" data-i18n="converterTitle">Image converter</h2><p data-i18n="converterDescription">Choose a direction, add an image, and convert.</p></div><span class="privacy-badge" data-i18n="privacyBadge">🔒 No file uploads</span></div>
+      <div class="mode-tabs" role="group" aria-label="Conversion type"><button class="mode-tab active" type="button" data-mode="jpg-png" aria-pressed="true">JPG <span>→</span> PNG</button><button class="mode-tab" type="button" data-mode="png-jpg" aria-pressed="false">PNG <span>→</span> JPG</button></div>
+      <input type="file" id="file" accept="image/jpeg,.jpg,.jpeg" class="sr-only">
+      <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-describedby="dropHelp"><div class="drop-icon">⇧</div><strong data-i18n="dropTitle">Drag & drop an image here</strong><p data-i18n="dropOr">or click to browse files</p><small id="dropHelp" data-i18n="dropHintJpg">JPG / JPEG · Maximum 20 MB</small></div>
+      <div id="fileDetails" class="file-details" hidden><img id="preview" alt="Image preview"><div class="file-text"><strong id="fileName"></strong><span id="fileSize"></span></div><button id="remove" class="remove" type="button" aria-label="Remove file">✕</button></div>
+      <div id="pngOptions" class="options" hidden><label for="background" data-i18n="backgroundLabel">Background for transparent areas</label><div class="color-row"><input id="background" type="color" value="#ffffff"><span id="backgroundValue">#FFFFFF</span></div><p data-i18n="backgroundHint">JPG does not support transparency. Transparent pixels will use this color.</p></div>
+      <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+      <button id="convert" class="primary-button" type="button" disabled data-i18n="convertJpg">Convert to PNG</button>
+      <a id="download" class="download-button" hidden download data-i18n="download">↓ Download converted image</a>
+    </section>
+    <section class="features" aria-label="Benefits"><div><span>⚡</span><h3 data-i18n="feature1Title">Instant conversion</h3><p data-i18n="feature1Text">No waiting for a server.</p></div><div><span>🔒</span><h3 data-i18n="feature2Title">Private by design</h3><p data-i18n="feature2Text">Images stay on your device.</p></div><div><span>✨</span><h3 data-i18n="feature3Title">Simple and free</h3><p data-i18n="feature3Text">No account or payment required.</p></div></section>
+    <section class="faq"><h2 data-i18n="faqTitle">Frequently asked questions</h2><details><summary data-i18n="q1">Will my image be uploaded?</summary><p data-i18n="a1">No. Conversion happens locally in your browser. We don't receive your image.</p></details><details><summary data-i18n="q2">Can JPG have a transparent background?</summary><p data-i18n="a2">No. JPG does not support transparency. Choose a background color when converting PNG to JPG.</p></details><details><summary data-i18n="q3">Will image quality change?</summary><p data-i18n="a3">PNG is lossless. JPG uses lossy compression, so PNG to JPG may reduce quality slightly.</p></details></section>
+  </main>
+  <div id="successModal" class="modal" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalDescription" tabindex="-1">
+      <button id="modalClose" class="modal-close" type="button" aria-label="Close">✕</button>
+      <div class="modal-check" aria-hidden="true">✓</div>
+      <h2 id="modalTitle" data-i18n="modalTitle">Conversion complete!</h2>
+      <p id="modalDescription" data-i18n="modalDescription">Your image is ready to download.</p>
+      <p id="modalFileName" class="modal-filename"></p>
+      <a id="modalDownload" class="primary-button" download data-i18n="modalDownload">↓ Download file</a>
+      <button id="modalDone" class="modal-done" type="button" data-i18n="modalDone">Close</button>
+    </div>
+  </div>
+  <footer>© <span id="year"></span> FileConvert <span class="dot">·</span> <span data-i18n="footer">Made for simple, private image conversion.</span></footer>
+</body>
+</html>

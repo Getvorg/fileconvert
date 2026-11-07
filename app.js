@@ -1,0 +1,131 @@
+'use strict';
+const translations = {
+  en: {headerHint:'Free image converter',eyebrow:'FREE · PRIVATE · FAST',title:'Convert JPG & PNG online',subtitle:'Quick image conversion right in your browser. Your files never leave your device.',converterTitle:'Image converter',converterDescription:'Choose a direction, add an image, and convert.',privacyBadge:'🔒 No file uploads',dropTitle:'Drag & drop an image here',dropOr:'or click to browse files',dropHintJpg:'JPG / JPEG · Maximum 20 MB',dropHintPng:'PNG · Maximum 20 MB',backgroundLabel:'Background for transparent areas',backgroundHint:'JPG does not support transparency. Transparent pixels will use this color.',convertJpg:'Convert to PNG',convertPng:'Convert to JPG',download:'↓ Download converted image',feature1Title:'Instant conversion',feature1Text:'No waiting for a server.',feature2Title:'Private by design',feature2Text:'Images stay on your device.',feature3Title:'Simple and free',feature3Text:'No account or payment required.',faqTitle:'Frequently asked questions',q1:'Will my image be uploaded?',a1:"No. Conversion happens locally in your browser. We don't receive your image.",q2:'Can JPG have a transparent background?',a2:'No. JPG does not support transparency. Choose a background color when converting PNG to JPG.',q3:'Will image quality change?',a3:'PNG is lossless. JPG uses lossy compression, so PNG to JPG may reduce quality slightly.',footer:'Made for simple, private image conversion.',ready:'File ready to download!',errorType:'Please choose a file in the correct format.',errorSize:'The image must be 20 MB or smaller.',errorOpen:'Could not open this image. It may be damaged or unsupported.',errorConvert:'Conversion failed. Try a different image.',working:'Converting…',modalTitle:'Conversion complete!',modalDescription:'Your image is ready to download.',modalDownload:'↓ Download file',modalDone:'Close'},
+  ru: {headerHint:'Бесплатный конвертер',eyebrow:'БЕСПЛАТНО · БЕЗОПАСНО · БЫСТРО',title:'Конвертация JPG и PNG онлайн',subtitle:'Быстро конвертируйте изображения в браузере. Файлы не покидают ваше устройство.',converterTitle:'Конвертер изображений',converterDescription:'Выберите направление, добавьте изображение и конвертируйте.',privacyBadge:'🔒 Без загрузки на сервер',dropTitle:'Перетащите изображение сюда',dropOr:'или нажмите, чтобы выбрать файл',dropHintJpg:'JPG / JPEG · До 20 МБ',dropHintPng:'PNG · До 20 МБ',backgroundLabel:'Фон для прозрачных областей',backgroundHint:'JPG не поддерживает прозрачность. Прозрачные пиксели получат выбранный цвет.',convertJpg:'Конвертировать в PNG',convertPng:'Конвертировать в JPG',download:'↓ Скачать изображение',feature1Title:'Мгновенная конвертация',feature1Text:'Не нужно ждать ответа сервера.',feature2Title:'Конфиденциально',feature2Text:'Изображения остаются на устройстве.',feature3Title:'Просто и бесплатно',feature3Text:'Без регистрации и оплаты.',faqTitle:'Частые вопросы',q1:'Мой файл будет загружен на сервер?',a1:'Нет. Конвертация выполняется в браузере, изображение никуда не отправляется.',q2:'Может ли JPG иметь прозрачный фон?',a2:'Нет. JPG не поддерживает прозрачность. При конвертации PNG в JPG выберите цвет фона.',q3:'Изменится ли качество изображения?',a3:'PNG использует сжатие без потерь. JPG — с потерями, поэтому качество может немного снизиться.',footer:'Простая и конфиденциальная конвертация.',ready:'Файл готов к скачиванию!',errorType:'Пожалуйста, выберите файл нужного формата.',errorSize:'Размер изображения не должен превышать 20 МБ.',errorOpen:'Не удалось открыть изображение. Возможно, файл повреждён или не поддерживается.',errorConvert:'Ошибка конвертации. Попробуйте другой файл.',working:'Конвертация…',modalTitle:'Конвертация завершена!',modalDescription:'Изображение готово к скачиванию.',modalDownload:'↓ Скачать файл',modalDone:'Закрыть'}
+};
+const MAX_SIZE = 20 * 1024 * 1024;
+let mode = 'jpg-png';
+let lang = localStorage.getItem('fileconvert_lang') === 'ru' ? 'ru' : 'en';
+let currentFile = null;
+let previewUrl = null;
+let downloadUrl = null;
+let previousFocus = null;
+function closeModal() {
+  if (el('successModal').hidden) return;
+  el('successModal').hidden = true;
+  document.body.classList.remove('modal-open');
+  if (previousFocus && previousFocus.isConnected) previousFocus.focus();
+}
+function openModal() {
+  previousFocus = document.activeElement;
+  el('modalFileName').textContent = el('download').download;
+  el('modalDownload').href = downloadUrl;
+  el('modalDownload').download = el('download').download;
+  el('successModal').hidden = false;
+  document.body.classList.add('modal-open');
+  el('modalDownload').focus();
+}
+const el = id => document.getElementById(id);
+const t = key => translations[lang][key];
+function setLanguage(next) {
+  lang = next; localStorage.setItem('fileconvert_lang', lang);
+  document.documentElement.lang = lang; el('language').value = lang;
+  document.querySelectorAll('[data-i18n]').forEach(element => { element.textContent = t(element.dataset.i18n); });
+  el('dropHelp').textContent = t(mode === 'jpg-png' ? 'dropHintJpg' : 'dropHintPng');
+  el('convert').textContent = t(mode === 'jpg-png' ? 'convertJpg' : 'convertPng');
+  document.title = lang === 'ru' ? 'FileConvert — конвертер JPG и PNG' : 'FileConvert — JPG & PNG Converter';
+  if (downloadUrl) el('feedback').textContent = t('ready');
+}
+function clearOutput() {
+  closeModal();
+  if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+  downloadUrl = null; el('download').hidden = true; el('download').removeAttribute('href');
+  el('feedback').textContent = '';
+}
+function clearFile() {
+  currentFile = null; el('file').value = '';
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = null; el('preview').removeAttribute('src');
+  el('fileDetails').hidden = true; el('convert').disabled = true; clearOutput();
+}
+function setMode(next) {
+  mode = next;
+  document.querySelectorAll('.mode-tab').forEach(btn => { const active = btn.dataset.mode === mode; btn.classList.toggle('active', active); btn.setAttribute('aria-pressed', String(active)); });
+  el('file').accept = mode === 'jpg-png' ? 'image/jpeg,.jpg,.jpeg' : 'image/png,.png';
+  el('pngOptions').hidden = mode !== 'png-jpg';
+  clearFile(); setLanguage(lang);
+}
+function selectFile(file) {
+  clearFile();
+  if (!file) return;
+  const valid = mode === 'jpg-png' ? file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name) : file.type === 'image/png' || /\.png$/i.test(file.name);
+  if (!valid) { el('feedback').textContent = t('errorType'); return; }
+  if (file.size > MAX_SIZE) { el('feedback').textContent = t('errorSize'); return; }
+  previewUrl = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { currentFile = file; el('preview').src = previewUrl; el('fileName').textContent = file.name; el('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB'; el('fileDetails').hidden = false; el('convert').disabled = false; };
+  img.onerror = () => { clearFile(); el('feedback').textContent = t('errorOpen'); };
+  img.src = previewUrl;
+}
+function convert() {
+  if (!currentFile || !previewUrl) return;
+  clearOutput(); const file = currentFile; const src = previewUrl; const selectedMode = mode;
+  el('convert').disabled = true; el('convert').textContent = t('working');
+  const image = new Image();
+  image.onload = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      if (!canvas.width || !canvas.height) throw Error('Empty image');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw Error('Canvas unavailable');
+      if (selectedMode === 'png-jpg') { ctx.fillStyle = el('background').value; ctx.fillRect(0,0,canvas.width,canvas.height); }
+      ctx.drawImage(image,0,0);
+      const mime = selectedMode === 'jpg-png' ? 'image/png' : 'image/jpeg';
+      canvas.toBlob(blob => {
+        el('convert').disabled = false; el('convert').textContent = t(selectedMode === 'jpg-png' ? 'convertJpg' : 'convertPng');
+        if (mode !== selectedMode || currentFile !== file) return;
+        if (!blob) { el('feedback').textContent = t('errorConvert'); return; }
+        downloadUrl = URL.createObjectURL(blob);
+        const ext = selectedMode === 'jpg-png' ? 'png' : 'jpg';
+        el('download').href = downloadUrl;
+        el('download').download = file.name.replace(/\.[^.]+$/, '') + '.' + ext;
+        el('download').hidden = false;
+        el('feedback').textContent = t('ready');
+        openModal();
+      }, mime, selectedMode === 'png-jpg' ? 0.92 : undefined);
+    } catch (e) {
+      el('convert').disabled = false; el('convert').textContent = t(selectedMode === 'jpg-png' ? 'convertJpg' : 'convertPng');
+      el('feedback').textContent = t('errorConvert');
+      console.error(e);
+    }
+  };
+  image.onerror = () => { el('convert').disabled = false; el('convert').textContent = t(selectedMode === 'jpg-png' ? 'convertJpg' : 'convertPng'); el('feedback').textContent = t('errorOpen'); };
+  image.src = src;
+}
+document.querySelectorAll('.mode-tab').forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
+el('language').addEventListener('change', event => setLanguage(event.target.value));
+el('dropzone').addEventListener('click', () => el('file').click());
+el('dropzone').addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); el('file').click(); } });
+el('file').addEventListener('change', event => selectFile(event.target.files[0]));
+for (const eventName of ['dragenter','dragover']) el('dropzone').addEventListener(eventName, event => {event.preventDefault();el('dropzone').classList.add('dragging');});
+for (const eventName of ['dragleave','drop']) el('dropzone').addEventListener(eventName, event => {event.preventDefault();el('dropzone').classList.remove('dragging');});
+el('dropzone').addEventListener('drop', event => selectFile(event.dataTransfer.files[0]));
+el('remove').addEventListener('click', clearFile);
+el('convert').addEventListener('click', convert);
+el('background').addEventListener('input', event => { el('backgroundValue').textContent = event.target.value.toUpperCase();clearOutput(); });
+el('modalClose').addEventListener('click', closeModal);
+el('modalDone').addEventListener('click', closeModal);
+el('successModal').addEventListener('click', event => { if (event.target === el('successModal')) closeModal(); });
+document.addEventListener('keydown', event => {
+  if (el('successModal').hidden) return;
+  if (event.key === 'Escape') { event.preventDefault(); closeModal(); }
+  if (event.key === 'Tab') {
+    const controls = [el('modalClose'), el('modalDownload'), el('modalDone')];
+    const i = controls.indexOf(document.activeElement);
+    if (event.shiftKey && i <= 0) { event.preventDefault(); controls[controls.length - 1].focus(); }
+    else if (!event.shiftKey && i === controls.length - 1) { event.preventDefault(); controls[0].focus(); }
+  }
+});
+el('year').textContent = new Date().getFullYear();
+setMode('jpg-png');
