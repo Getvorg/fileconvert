@@ -1,1 +1,17 @@
-{"name":"fileconvert","version":"1.0.0","private":true,"type":"module","scripts":{"build":"node scripts/build.mjs","start":"python server.py","check":"node --check app.js && node --check scripts/build.mjs"},"engines":{"node":">=22"}}
+{
+  "name": "fileconvert",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "python server.py",
+    "check": "node --check app.js && node --check catalog.js && node --check pdf-tools.js && node --check scripts/build.mjs && node --check scripts/catalog.mjs && node --check scripts/pdf-page.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "pdf-lib": "1.17.1"
+  }
+}

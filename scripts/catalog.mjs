@@ -1,0 +1,23 @@
+export const groups = {
+ all: ['All tools', 'Все инструменты'],
+ organize: ['Organize PDF', 'Организовать PDF'],
+ convert: ['Convert to PDF', 'Конвертировать в PDF'],
+ edit: ['Edit PDF', 'Редактировать PDF'],
+ images: ['Images', 'Изображения'],
+};
+export const tools = [
+ {slug:'merge-pdf', group:'organize', icon:'⇲', name:['Merge PDF','Объединить PDF'], description:['Combine PDF files into one document in your preferred order.','Объединяйте PDF-файлы в один документ в нужном порядке.']},
+ {slug:'split-pdf', group:'organize', icon:'⇱', name:['Split PDF','Разделить PDF'], description:['Extract a page range or save every page as a separate PDF.','Извлеките нужные страницы или сохраните каждую в отдельный PDF.']},
+ {slug:'jpg-to-pdf', group:'convert', icon:'▧', name:['JPG to PDF','JPG в PDF'], description:['Turn JPG images into a PDF. Arrange images and choose the page size.','Соберите JPG-изображения в PDF. Настройте порядок и размер страниц.']},
+ {slug:'rotate-pdf', group:'edit', icon:'↻', name:['Rotate PDF','Повернуть PDF'], description:['Rotate all pages or selected pages by 90, 180 or 270 degrees.','Поверните все или выбранные страницы на 90, 180 или 270 градусов.']},
+ {slug:'jpg-to-png', group:'images', icon:'PNG', name:['JPG to PNG','JPG в PNG'], description:['Convert JPG images to PNG without further compression loss.','Преобразуйте JPG в PNG без дополнительных потерь при сжатии.']},
+ {slug:'png-to-jpg', group:'images', icon:'JPG', name:['PNG to JPG','PNG в JPG'], description:['Convert PNG to JPG and choose a background for transparent areas.','Преобразуйте PNG в JPG и выберите фон для прозрачных областей.']},
+];
+export function toolNavigation(ru, prefix) {
+ const i=Number(ru);
+ return `<nav class="tool-navigation" aria-label="${ru?'Инструменты':'Tools'}"><a href="${prefix}#tools">${groups.all[i]}</a>${Object.entries(groups).filter(([g])=>g!=='all').map(([group,label])=>`<details class="nav-group"><summary>${label[i]}</summary><div class="nav-menu">${tools.filter(t=>t.group===group).map(t=>`<a href="${prefix}${t.slug}/">${t.name[i]}</a>`).join('')}</div></details>`).join('')}</nav>`;
+}
+export function catalog(ru,prefix) {
+ const i=Number(ru);
+ return `<main class="catalog"><section class="hero"><span class="eyebrow">${ru?'БЕСПЛАТНО · В БРАУЗЕРЕ · БЕЗ РЕГИСТРАЦИИ':'FREE · IN YOUR BROWSER · NO SIGN-UP'}</span><h1>${ru?'Инструменты для PDF и изображений':'PDF and image tools, made simple'}</h1><p class="subtitle">${ru?'Объединяйте, разделяйте и поворачивайте PDF, создавайте документы из JPG и конвертируйте изображения. Ваши файлы остаются на устройстве.':'Merge, split and rotate PDFs, create documents from JPG images, and convert images. Your files stay on your device.'}</p></section><section id="tools" aria-label="${groups.all[i]}"><div class="category-filters" role="group" aria-label="${ru?'Категории':'Categories'}">${Object.entries(groups).map(([g,label])=>`<button type="button" data-filter="${g}" aria-pressed="${g==='all'}">${label[i]}</button>`).join('')}</div><div class="tool-grid">${tools.map(t=>`<a class="tool-card ${t.group}" href="${prefix}${t.slug}/" data-category="${t.group}"><span class="tool-icon" aria-hidden="true">${t.icon}</span><h2>${t.name[i]}</h2><p>${t.description[i]}</p><span class="card-action">${ru?'Открыть инструмент':'Open tool'} <span aria-hidden="true">→</span></span></a>`).join('')}</div><p id="catalog-status" class="sr-only" role="status" aria-live="polite"></p></section><section class="catalog-note"><h2>${ru?'Простая работа с файлами':'A simpler way to work with files'}</h2><p>${ru?'Выберите инструмент, добавьте файлы и сохраните результат. Все шесть инструментов работают локально в браузере, без отправки ваших документов на сервер. Для каждой операции есть инструкция и описание ограничений.':'Choose a tool, add files and save the result. All six tools process files locally in your browser without uploading documents to a server. Each tool includes instructions and explains its limits.'}</p></section></main>`;
+}
