@@ -1,3 +1,4 @@
+import {PDFThumbnails} from './pdf-thumbnails.js';
 'use strict';
 (() => {
  const root=document.querySelector('[data-pdf-tool]');
@@ -7,14 +8,41 @@
  const get=id=>document.getElementById(id);
  const input=get('pdf-files'), run=get('pdf-run'), list=get('pdf-file-list'), feedback=get('pdf-feedback'), results=get('pdf-results');
  const MAX_TOTAL=50*1024*1024;
- let files=[], urls=[], busy=false;
+ let files=[], urls=[], busy=false, previewFile=null;
+ const imageUrls=new Map();
+ function selectedPages(count){try{return new Set(indices(count));}catch{return new Set();}}
+ const previews=jpg?null:new PDFThumbnails(get('pdf-page-previews'),{
+  t:tr,
+  selection:count=>split&&get('split-mode').value==='each'?new Set(Array.from({length:count},(_,i)=>i)):selectedPages(count),
+  disabled:()=>busy||(split&&get('split-mode').value==='each'),
+  angle:(index,count)=>tool==='rotate-pdf'&&selectedPages(count).has(index)?Number(get('rotation').value):0,
+  onToggle:(index,count)=>{
+   if(busy)return;
+   const selected=selectedPages(count);
+   if(selected.has(index)){if(selected.size===1){feedback.textContent=tr('Keep at least one page selected.','Оставьте хотя бы одну выбранную страницу.');return;}selected.delete(index);}else selected.add(index);
+   get('page-range').value=[...selected].map(i=>i+1).join(',');invalidate();
+  }
+ });
  function clearResults() { urls.forEach(url=>URL.revokeObjectURL(url)); urls=[]; results.replaceChildren(); }
  function invalidate() { clearResults(); feedback.textContent=''; }
  function render() {
   list.replaceChildren();
+  const loaded=files.length>0;
+  get('pdf-dropzone').hidden=loaded;get('selection-help').hidden=loaded;get('pdf-stage-controls').hidden=!loaded;
+  get('pdf-pick').disabled=busy;if(get('pdf-clear'))get('pdf-clear').disabled=busy;
+  list.hidden=!loaded;
+  get('pdf-page-previews').hidden=jpg||!loaded;
+  for(const [file,url] of imageUrls){if(!files.includes(file)){URL.revokeObjectURL(url);imageUrls.delete(file);}}
+  if(previews && files[0]!==previewFile){previewFile=files[0];void previews.setFile(previewFile);}
+  previews?.refresh();
   files.forEach((file,index)=>{
    const item=document.createElement('li'), label=document.createElement('span');
    label.textContent=`${file.name} · ${(file.size/1024/1024).toFixed(2)} MB`;
+   if(jpg){
+    if(!imageUrls.has(file))imageUrls.set(file,URL.createObjectURL(file));
+    const frame=document.createElement('div');frame.className='page-thumbnail';
+    const img=document.createElement('img');img.src=imageUrls.get(file);img.alt=tr(`Preview: ${file.name}`,`Миниатюра: ${file.name}`);img.loading='lazy';frame.append(img);item.append(frame);
+   }
    item.append(label);
    const controls=document.createElement('div');controls.className='file-controls';
    for(const [text,description,action,disabled] of [
@@ -24,7 +52,7 @@
    ]) {
     const button=document.createElement('button');button.type='button';button.textContent=text;
     button.setAttribute('aria-label',`${description}: ${file.name}`);button.disabled=busy||disabled;
-    button.addEventListener('click',()=>{action();invalidate();render();const remaining=list.querySelectorAll('button:not(:disabled)');if(remaining.length) remaining[Math.min(index*3,remaining.length-1)].focus();else input.focus();});
+    button.addEventListener('click',()=>{action();invalidate();render();if(!files.length){get('pdf-dropzone').focus();return;}const remaining=list.querySelectorAll('button:not(:disabled)');if(remaining.length) remaining[Math.min(index*3,remaining.length-1)].focus();else input.focus();});
     controls.append(button);
    }
    item.append(controls);list.append(item);
@@ -42,12 +70,15 @@
   files=next;render();
  }
  input.addEventListener('change',()=>{addFiles(input.files);input.value='';});
+ get('pdf-pick').addEventListener('click',()=>input.click());
+ get('pdf-clear')?.addEventListener('click',()=>{if(busy)return;files=[];invalidate();render();get('pdf-dropzone').focus();});
  const drop=get('pdf-dropzone');
+ drop.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();if(!busy)input.click();}});
  for(const type of ['dragenter','dragover']) drop.addEventListener(type,e=>{e.preventDefault();if(!busy) drop.classList.add('dragging');});
  for(const type of ['dragleave','drop']) drop.addEventListener(type,e=>{e.preventDefault();drop.classList.remove('dragging');});
  drop.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
- root.querySelectorAll('select,input[type=text]').forEach(control=>control.addEventListener('input',invalidate));
- get('split-mode')?.addEventListener('change',()=>{get('range-settings').hidden=get('split-mode').value==='each';});
+ root.querySelectorAll('select,input[type=text]').forEach(control=>control.addEventListener('input',()=>{invalidate();previews?.refresh();}));
+ get('split-mode')?.addEventListener('change',()=>{get('range-settings').hidden=get('split-mode').value==='each';previews?.refresh();});
  function indices(count) {
   const value=get('page-range').value.trim();
   if(!value) return Array.from({length:count},(_,i)=>i);

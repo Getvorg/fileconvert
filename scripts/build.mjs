@@ -11,7 +11,7 @@ const app = fs.readFileSync('app.js','utf8');
 const translations = vm.runInNewContext(app.slice(app.indexOf('const translations ='),app.indexOf('const MAX_SIZE')) + '; translations');
 const template = fs.readFileSync('templates/converter.html','utf8');
 fs.rmSync('dist',{recursive:true,force:true}); fs.mkdirSync('dist');
-for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js']) fs.copyFileSync(file,`dist/${file}`);
+for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js','pdf-thumbnails.js']) fs.copyFileSync(file,`dist/${file}`);
 fs.mkdirSync('dist/vendor');
 fs.copyFileSync('node_modules/pdf-lib/dist/pdf-lib.min.js', 'dist/vendor/pdf-lib.min.js');
 fs.copyFileSync('node_modules/pdf-lib/LICENSE.md', 'dist/vendor/pdf-lib.LICENSE.md');
@@ -54,7 +54,7 @@ for (const lang of ['en','ru']) {
  }
  write('',ru?'Инструменты PDF и изображений онлайн | FileConvert':'Free PDF and Image Tools Online | FileConvert',ru?'Объединение, разделение и поворот PDF, JPG в PDF и конвертация изображений. Бесплатно в браузере.':'Merge, split and rotate PDFs, convert JPG to PDF and convert images. Free tools that process files in your browser.',pageShell(catalog(ru,prefix)));
  for(const tool of tools.filter(t=>!['jpg-to-png','png-to-jpg','organize-pdf','merge-pdf'].includes(t.slug))) {
-  write(tool.slug,`${tool.name[Number(ru)]} ${ru?'онлайн бесплатно':'Online Free'} | FileConvert`,tool.description[Number(ru)],pageShell(pdfPage(tool,ru),'<script src="/vendor/pdf-lib.min.js" defer></script><script src="/pdf-tools.js" defer></script>'));
+  write(tool.slug,`${tool.name[Number(ru)]} ${ru?'онлайн бесплатно':'Online Free'} | FileConvert`,tool.description[Number(ru)],pageShell(pdfPage(tool,ru),'<script src="/vendor/pdf-lib.min.js" defer></script><script src="/pdf-tools.js" type="module"></script>'));
  }
  for (const slug of ['organize-pdf','merge-pdf']) {
  const organizer = tools.find(tool=>tool.slug===slug);

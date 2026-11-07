@@ -36,7 +36,7 @@ with sync_playwright() as p:
  card(2).scroll_into_view_if_needed();expect(card(2).locator('img')).to_have_attribute('data-turn','0')
  card(2).locator('[data-action=zoom]').click()
  expect(page.locator('#page-preview-dialog')).to_be_visible()
- page.wait_for_function('document.querySelector("#page-preview-canvas").width>0 && document.querySelector("#page-preview-status").textContent===""')
+ page.wait_for_function('()=>document.querySelector("#page-preview-canvas").width>0 && document.querySelector("#page-preview-status").textContent===""')
  expect(page.locator('#page-preview-title')).to_contain_text('beta.pdf')
  page.keyboard.press('Escape');expect(page.locator('#page-preview-dialog')).not_to_be_visible()
  assert card(2).locator('[data-action=zoom]').evaluate('(e)=>document.activeElement===e')

@@ -12,7 +12,7 @@ npm run build
 npm start
 ```
 
-Open http://127.0.0.1:8000. Edit `templates/converter.html`, `app.js`, `pdf-tools.js`, `catalog.js`, `pdf-organizer.js`, `styles.css`, and the modules in `scripts/`; rebuild after changes. Only `dist/` is served and deployed. Builds without `SITE_URL` intentionally disable search indexing.
+Open http://127.0.0.1:8000. Edit `templates/converter.html`, `app.js`, `pdf-tools.js`, `catalog.js`, `pdf-organizer.js`, `pdf-thumbnails.js`, `styles.css`, and the modules in `scripts/`; rebuild after changes. Only `dist/` is served and deployed. Builds without `SITE_URL` intentionally disable search indexing.
 
 ```sh
 npm run check
@@ -23,6 +23,7 @@ python tests/pdf_browser.py
 python tests/organizer_browser.py
 python tests/merge_visual_browser.py
 python tests/mixed_merge_browser.py
+python tests/preview_stage_browser.py
 ```
 
 Browser checks require the local server, use `/usr/bin/chromium`, and save a screenshot in `work/`.
@@ -72,7 +73,7 @@ The screenshot is a long-term tool catalog, not a list of currently supported fe
 
 Organize accepts one source PDF. Merge accepts 2–50 PDFs or images, with additional files appended on later selections. PNG, JPG/JPEG, WebP, GIF, BMP, AVIF and SVG images are converted to one PDF page each. Other browser-decodable image formats are attempted; HEIC/TIFF support is browser-dependent. Both tools share the same thumbnail-card workspace, with a magnifier preview, clockwise rotate and delete controls on each card. Images have a 20 MB / 40 MP per-file limit. Limits are 50 MB and 500 original pages across all loaded sources (deleted pages do not free that import limit). Page labels retain their original numbers, while position labels show the output order. At least one page must remain. Selection alone does not change the output; delete and rotate actions affect selected pages. Reset restores the original order/rotation across all imported documents and can itself be undone. Only the 30 most recent editing states are kept.
 
-PDF.js 6.5.438 (Apache-2.0) renders thumbnails in a local worker. Worker, fonts, CMaps, WASM decoders and licenses are published under `/vendor/pdfjs/`. Only visual merge and the page organizer load PDF.js; other tools keep their previous loading behavior. The CSP allows same-origin workers and WebAssembly compilation (`wasm-unsafe-eval`), without permitting JavaScript eval or remote scripts. Preview rendering disables PDF.js eval support and does not run document scripts or create interactive PDF annotation links.
+PDF.js 6.5.438 (Apache-2.0) renders thumbnails in a local worker. Worker, fonts, CMaps, WASM decoders and licenses are published under `/vendor/pdfjs/`. Visual merge and the page organizer load PDF.js; split/rotate import it lazily after selecting a PDF. JPG tools and the catalog do not load the PDF.js runtime. The CSP allows same-origin workers and WebAssembly compilation (`wasm-unsafe-eval`), without permitting JavaScript eval or remote scripts. Preview rendering disables PDF.js eval support and does not run document scripts or create interactive PDF annotation links.
 
 Thumbnails render sequentially near the viewport. Offscreen image URLs are released; undo history stores page indices, rotations and selections rather than copies of the source PDF. Download links are invalidated after content changes. In organize mode, selecting a new PDF clears edits to the previous document; in merge mode, successful imports append pages and failed batches preserve prior files and edits; malformed, encrypted and over-limit documents cannot be exported.
 
@@ -85,3 +86,11 @@ The page-card magnifier opens a native modal dialog with a larger rendered page,
 `/merge-pdf/` accepts a mixture of PDFs and images, retaining input file order. PDFs remain PDF pages; images are decoded locally, respecting browser EXIF orientation, and embedded as PNG-backed PDF pages. Image aspect ratio and transparency are preserved. Page dimensions use one PDF point per image pixel, scaled down proportionally if a side would exceed 14,400 PDF points. Animations and multi-frame images contribute one still frame; SVG is rasterized. Re-encoding does not recover lost image detail and can increase file size.
 
 No external conversion service or new decoder dependency is used. Formats not decoded by the current browser produce a clear error recommending PNG/JPG. A rejected batch does not partially import or replace previously loaded files. `tests/mixed_merge_browser.py` checks actual PNG/JPEG/WebP/GIF/BMP/AVIF/SVG files under production CSP, mixed output text/colors/dimensions, transparent PNG, EXIF rotation, animated GIF, image-only/drop merging, import limits and atomic failures.
+
+## Upload-to-preview state
+
+All seven tool pages now replace their large upload prompt with previews after selection. Native file inputs stay visually hidden; accessible upload labels and compact Add/Replace controls open the picker. Merge/organize retain their shared visual page editor. JPG → PDF displays image cards with existing ordering/removal actions. JPG/PNG converters use a full image preview with replace/remove controls. Removing the last file restores the initial upload state.
+
+Split and rotate use `pdf-thumbnails.js`, which renders selected PDFs lazily with PDF.js and releases offscreen blob URLs. Checkbox selection and the page-range input stay synchronized. An empty range means all pages; at least one checkbox remains selected. Split-every-page disables subset selection. Rotate previews include the original page rotation plus the selected output angle, matching the saved PDF. Replacing/removing the PDF destroys the previous preview document; preview failures do not bypass conversion validation.
+
+`tests/preview_stage_browser.py` exercises all seven tools in both languages: upload/previews occupying the same stage, restoration/replacement, painted thumbnails, visual range selection, rotation/output agreement and mobile overflow.

@@ -36,7 +36,8 @@ function controls() {
  get('editor-undo').disabled = busy || !history.length;
  get('editor-reset').disabled = busy || !history.length;
  save.disabled = busy || !pages.length || (mergeMode && sources.length < 2);
- input.disabled = busy;
+ input.disabled = busy;get('editor-pick').disabled=busy;
+ const loaded=pages.length>0&&!workspace.hidden;get('editor-dropzone').hidden=loaded;get('editor-file-help').hidden=loaded;
  for (const [id, card] of cards) {
   const index = pages.findIndex(page => page.id === id), page = pages[index];
   if (!page) continue;
@@ -292,7 +293,9 @@ async function loadFiles(incoming) {
  } finally { busy=false; controls(); render(); }
 }
 input.addEventListener('change', () => { const files=Array.from(input.files); input.value=''; void loadFiles(files); });
+get('editor-pick').addEventListener('click',()=>input.click());
 const drop=get('editor-dropzone');
+drop.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();if(!busy)input.click();}});
 for(const type of ['dragenter','dragover']) drop.addEventListener(type,event=>{event.preventDefault();if(!busy && event.dataTransfer.types.includes('Files')) drop.classList.add('dragging');});
 for(const type of ['dragleave','drop']) drop.addEventListener(type,event=>{event.preventDefault();drop.classList.remove('dragging');});
 drop.addEventListener('drop',event=>void loadFiles(event.dataTransfer.files));
