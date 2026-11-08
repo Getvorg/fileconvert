@@ -7,6 +7,7 @@ const input = get('editor-file'), feedback = get('editor-feedback');
 const workspace = get('editor-workspace'), grid = get('editor-pages');
 const save = get('editor-save'), result = get('editor-result');
 const mergeMode = document.querySelector('[data-editor-mode]').dataset.editorMode === 'merge';
+let workSession=null;
 let sources = [], sourceName = '',nextPageId=0,insertionAfter=null,blankSource=null;
 let zoomRender = null, zoomRevision = 0, zoomFocus = null;
 let pages = [], history = [], busy = false, revision = 0, downloadUrl = null;
@@ -56,7 +57,7 @@ function controls() {
   for(const kind of ['duplicate','blank'])card.querySelector(`[data-action=${kind}]`).disabled=busy||pages.length>=500;
   card.querySelector('.page-drag').draggable = !busy;
  }
- workspace.setAttribute('aria-busy', String(busy));
+ workspace.setAttribute('aria-busy', String(busy));workSession?.changed();
 }
 function releaseImage(card) {
  const img = card.querySelector('img');
@@ -269,7 +270,7 @@ async function loadFiles(incoming,{append=mergeMode,insertAfter=null}={}) {
    const count = doc.getPageCount();
    if(!count||total+count>500||(append?pages.length:0)+addedCount+count>500) throw Error('page-limit');
    const task = pdfjs.getDocument({data:bytes, isEvalSupported:false, useSystemFonts:true, cMapUrl:'/vendor/pdfjs/cmaps/', cMapPacked:true, standardFontDataUrl:'/vendor/pdfjs/standard_fonts/', wasmUrl:'/vendor/pdfjs/wasm/'});
-   const record = {id: sources.length+pending.length, doc, task, name:file.name, size:file.size, count, start:total, preview:null}; pending.push(record);
+   const record = {file,id: sources.length+pending.length, doc, task, name:file.name, size:file.size, count, start:total, preview:null}; pending.push(record);
    record.preview = await task.promise;
    total += count;addedCount+=count;
   }
@@ -336,9 +337,9 @@ save.addEventListener('click', async () => {
   pages.forEach(entry=>{const page=copiedById.get(entry.id);page.setRotation(window.PDFLib.degrees((page.getRotation().angle+entry.turn)%360));output.addPage(page);});
   savePanel.wait(t('Writing PDF…','Запись PDF…'));
   const bytes = await output.save();
-  downloadUrl = URL.createObjectURL(new Blob([bytes], {type: 'application/pdf'}));
+  const outputBlob=new Blob([bytes], {type:'application/pdf'});downloadUrl = URL.createObjectURL(outputBlob);
   const link = document.createElement('a'); link.href = downloadUrl; link.download = outputName(); link.className = 'download-button'; link.textContent = `↓ ${outputName()}`;
-  result.append(link);savePanel.complete(suggestedName(),bytes.length); link.focus(); announce(t('Ready. Download and check your PDF.', 'Готово. Скачайте и проверьте PDF.'));
+  result.append(link);savePanel.complete(suggestedName(),bytes.length);savePanel.setOutput(outputBlob,{name:suggestedName()}); link.focus(); announce(t('Ready. Download and check your PDF.', 'Готово. Скачайте и проверьте PDF.'));
  } catch { clearDownload();savePanel.fail(); announce(t('Could not save this PDF. Try a smaller or simpler document.', 'Не удалось сохранить PDF. Попробуйте документ меньшего размера или сложности.')); }
  finally { busy = false; save.textContent = mergeMode ? t('Merge PDF', 'Объединить PDF') : t('Save PDF', 'Сохранить PDF'); controls(); }
 });
@@ -378,3 +379,10 @@ async function addBlank(after){
   remember();const index=pages.findIndex(page=>page.id===after);pages.splice(index<0?pages.length:index+1,0,{id:nextPageId++,sourceId:blankSource.id,index:0,turn:0,selected:false,blank:true});render();
  }catch{announce(t('Could not create blank page.','Не удалось создать пустую страницу.'));}finally{busy=false;controls();}
 }
+
+workSession=FileWorkflow.workspace({root:document.querySelector('[data-editor-mode]'),busy:()=>busy,capture:()=>({files:sources.filter(s=>!s.synthetic).map(s=>s.file),sources:sources.map(s=>({id:s.id,synthetic:!!s.synthetic,originalIds:s.originalIds||[]})),pages:snapshot(),nextPageId}),receive:async file=>{await loadFiles([file],{append:false});if(!sources.some(s=>s.file===file))throw Error();},restore:async state=>{
+ if(!state.files?.length)throw Error();await loadFiles([state.files[0]],{append:false});if(state.files.length>1)await loadFiles(state.files.slice(1),{append:true});
+ const real=sources.filter(s=>!s.synthetic),old=state.sources.filter(s=>!s.synthetic);if(real.length!==old.length)throw Error();const ids=new Map(old.map((s,i)=>[s.id,real[i].id]));old.forEach((s,i)=>real[i].originalIds=s.originalIds);
+ const synthetic=state.sources.find(s=>s.synthetic);if(synthetic){await addBlank(null);if(!blankSource)throw Error();ids.set(synthetic.id,blankSource.id);}
+ revision++;cards.forEach(card=>{observer.unobserve(card);releaseImage(card);});cards.clear();visible.clear();renderQueue=[];grid.replaceChildren();pages=state.pages.map(p=>({...p,sourceId:ids.get(p.sourceId)}));nextPageId=state.nextPageId;history=[];clearDownload();render();
+}});

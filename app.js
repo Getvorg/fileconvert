@@ -8,6 +8,7 @@ let mode = 'jpg-png';
 let lang = document.body.dataset.language || 'en';
 let selectionVersion = 0;
 let currentFile = null;
+let workSession=null;
 let imageRotation = 0;
 let previewUrl = null;
 let downloadUrl = null;
@@ -59,11 +60,11 @@ function clearOutput() {
   downloadUrl = null; el('download').hidden = true; el('download').removeAttribute('href');
   el('feedback').textContent = '';
 }
-function clearFile() {
+function clearFile({forget=true}={}) {
   selectionVersion++; imageRotation=0;el('imagePreviewFrame').className='image-preview-frame turn-0';currentFile = null; el('file').value = '';
   if (previewUrl) URL.revokeObjectURL(previewUrl);
   previewUrl = null; el('preview').removeAttribute('src');
-  el('fileDetails').hidden = true; el('dropzone').hidden = false; el('convert').disabled = true; clearOutput();
+  el('fileDetails').hidden = true; el('dropzone').hidden = false; el('convert').disabled = true; clearOutput();if(forget)workSession?.changed();
 }
 function setMode(next) {
   mode = next;
@@ -72,19 +73,19 @@ function setMode(next) {
   el('pngOptions').hidden = mode !== 'png-jpg';
   clearFile(); setLanguage(lang);
 }
-function selectFile(file,{restore=false,rotation=0}={}) {
+function selectFile(file,{restore=false,rotation=0,onReady=()=>{}}={}) {
   if(!restore&&file)remember();
-  clearFile();
-  if (!file) return;
+  clearFile({forget:false});
+  if (!file) {workSession?.changed();onReady();return;}
   const valid = mode === 'jpg-png' ? file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name) : file.type === 'image/png' || /\.png$/i.test(file.name);
-  if (!valid) { el('feedback').textContent = t('errorType'); return; }
-  if (file.size > MAX_SIZE) { el('feedback').textContent = t('errorSize'); return; }
+  if (!valid) { el('feedback').textContent = t('errorType'); onReady(Error());return; }
+  if (file.size > MAX_SIZE) { el('feedback').textContent = t('errorSize'); onReady(Error());return; }
   const version = selectionVersion;
   const selectedUrl = URL.createObjectURL(file);
   previewUrl = selectedUrl;
   const img = new Image();
-  img.onload = () => { if (version !== selectionVersion) return; currentFile = file;imageRotation=rotation;el('imagePreviewFrame').className='image-preview-frame turn-'+rotation;savePanel.setDefault(file.name.replace(/\.[^.]+$/,'')+(mode==='jpg-png'?'.png':'.jpg')); el('preview').src = previewUrl; el('fileName').textContent = file.name; el('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB'; el('fileDetails').hidden = false; el('dropzone').hidden = true; el('convert').disabled = false; };
-  img.onerror = () => { if (version !== selectionVersion) return; clearFile(); el('feedback').textContent = t('errorOpen'); };
+  img.onload = () => { if (version !== selectionVersion) return; currentFile = file;imageRotation=rotation;el('imagePreviewFrame').className='image-preview-frame turn-'+rotation;savePanel.setDefault(file.name.replace(/\.[^.]+$/,'')+(mode==='jpg-png'?'.png':'.jpg')); el('preview').src = previewUrl; el('fileName').textContent = file.name; el('fileSize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB'; el('fileDetails').hidden = false; el('dropzone').hidden = true; el('convert').disabled = false;workSession?.changed();onReady(); };
+  img.onerror = () => { if (version !== selectionVersion) return; clearFile({forget:false}); el('feedback').textContent = t('errorOpen');onReady(Error()); };
   img.src = selectedUrl;
 }
 function convert() {
@@ -115,7 +116,7 @@ function convert() {
         el('download').download = savePanel.outputName(file.name.replace(/\.[^.]+$/, '') + '.' + ext);
         el('download').hidden = false;
         el('feedback').textContent = t('ready');
-        savePanel.complete(file.name.replace(/\.[^.]+$/, '')+'.'+ext,blob.size);openModal();
+        savePanel.complete(file.name.replace(/\.[^.]+$/, '')+'.'+ext,blob.size);savePanel.setOutput(blob,{name:file.name.replace(/\.[^.]+$/, '')+'.'+ext,originals:[{file,angle:rotation}]});openModal();
       }, mime, selectedMode === 'png-jpg' ? 0.92 : undefined);
     } catch (e) {
       if(selectedVersion!==selectionVersion)return;
@@ -135,7 +136,7 @@ el('file').addEventListener('change', event => selectFile(event.target.files[0])
 for (const eventName of ['dragenter','dragover']) el('dropzone').addEventListener(eventName, event => {event.preventDefault();el('dropzone').classList.add('dragging');});
 for (const eventName of ['dragleave','drop']) el('dropzone').addEventListener(eventName, event => {event.preventDefault();el('dropzone').classList.remove('dragging');});
 el('dropzone').addEventListener('drop', event => selectFile(event.dataTransfer.files[0]));
-el('rotateImage').addEventListener('click',()=>{if(!currentFile)return;remember();imageRotation=(imageRotation+90)%360;selectionVersion++;clearOutput();el('imagePreviewFrame').className='image-preview-frame turn-'+imageRotation;el('convert').disabled=false;el('convert').textContent=t(mode==='jpg-png'?'convertJpg':'convertPng');});
+el('rotateImage').addEventListener('click',()=>{if(!currentFile)return;remember();imageRotation=(imageRotation+90)%360;selectionVersion++;clearOutput();el('imagePreviewFrame').className='image-preview-frame turn-'+imageRotation;el('convert').disabled=false;el('convert').textContent=t(mode==='jpg-png'?'convertJpg':'convertPng');workSession?.changed();});
 el('changeFile').addEventListener('click',()=>el('file').click());
 el('remove').addEventListener('click',()=>{remember();clearFile();el('dropzone').focus();});
 el('convert').addEventListener('click', convert);
@@ -147,7 +148,7 @@ document.addEventListener('keydown', event => {
   if (el('successModal').hidden) return;
   if (event.key === 'Escape') { event.preventDefault(); closeModal(); }
   if (event.key === 'Tab') {
-    const controls = [el('modalClose'), el('modalDownload'), el('modalDone')];
+    const controls = [el('modalClose'), el('modalDownload'), resultPreview, el('modalDone')];
     const i = controls.indexOf(document.activeElement);
     if (event.shiftKey && i <= 0) { event.preventDefault(); controls[controls.length - 1].focus(); }
     else if (!event.shiftKey && i === controls.length - 1) { event.preventDefault(); controls[0].focus(); }
@@ -155,3 +156,7 @@ document.addEventListener('keydown', event => {
 });
 if (el('year')) el('year').textContent = new Date().getFullYear();
 setMode(document.body.dataset.mode === 'png-jpg' ? 'png-jpg' : 'jpg-png');
+
+const resultPreview=document.createElement('button');resultPreview.type='button';resultPreview.textContent=FileI18n.t('Preview result','Просмотреть результат');resultPreview.addEventListener('click',()=>{closeModal();void savePanel.previewResult();});el('modalDone').before(resultPreview);
+function restoreImage(file,rotation=0){return new Promise((resolve,reject)=>selectFile(file,{restore:true,rotation,onReady:error=>error?reject(error):resolve()}));}
+workSession=FileWorkflow.workspace({root:document.querySelector('.converter'),capture:()=>({files:currentFile?[currentFile]:[],rotation:imageRotation,background:el('background').value}),busy:()=>!!currentFile&&el('convert').disabled,restore:async state=>{el('background').value=state.background;lastBackground=state.background;el('backgroundValue').textContent=state.background.toUpperCase();edits.clear();await restoreImage(state.files[0],state.rotation);},receive:file=>restoreImage(file)});

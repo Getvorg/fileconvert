@@ -15,18 +15,18 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  const input=get('pdf-files'), run=get('pdf-run'), list=get('pdf-file-list'), feedback=get('pdf-feedback'), results=get('pdf-results');
  const runLabel=run.textContent;
  const MAX_TOTAL=50*1024*1024;
- let files=[], urls=[], busy=false, previewFile=null, pageOrder=[],lastStampFile=null,activeIndex=0,documentEdits=new Map(),live=null;
+ let files=[], urls=[], busy=false, previewFile=null, pageOrder=[],lastStampFile=null,activeIndex=0,documentEdits=new Map(),live=null,workSession=null;
  const savePanel=FileWorkspace.savePanel({root,button:run,results,name:jpg?'images.pdf':raster?'document-images.zip':split?'document-pages.zip':'document-rotated.pdf'});
  const edits=FileWorkspace.history();let lastSettings={};
  const settings=()=>Object.fromEntries([...new Set(['page-size','page-range','rotation','split-mode','render-dpi',...Array.from(root.querySelectorAll('[data-extra-option]')).map(el=>el.id)])].map(id=>[id,get(id)?.value]).filter(([,value])=>value!==undefined));
- const undo=FileWorkspace.undoRow(get('pdf-stage-controls'),()=>{
-  if(busy||!edits.length)return;const state=edits.pop();files=[...state.files];activeIndex=state.activeIndex||0;documentEdits=new Map(state.documentEdits||[]);
+ function applyState(state){files=[...state.files];activeIndex=state.activeIndex||0;documentEdits=new Map(state.documentEdits||[]);
   if(previews&&files[activeIndex]!==previewFile){previewFile=files[activeIndex];previews.ready=previews.setFile(previewFile);}
   imageTurns.clear();state.imageTurns.forEach(([f,a])=>imageTurns.set(f,a));pageTurns.clear();state.pageTurns.forEach(([i,a])=>pageTurns.set(i,a));removedPages.clear();state.removed.forEach(i=>removedPages.add(i));pageOrder=[...state.order];
   if(get('stamp-image')){const transfer=new DataTransfer();if(state.stampFile)transfer.items.add(state.stampFile);get('stamp-image').files=transfer.files;lastStampFile=state.stampFile||null;}
   Object.entries(state.settings).forEach(([id,value])=>{if(get(id))get(id).value=value;});
   if(split)get('range-settings').hidden=get('split-mode').value==='each';invalidate();render();
- });
+ }
+ const undo=FileWorkspace.undoRow(get('pdf-stage-controls'),()=>{if(!busy&&edits.length)applyState(edits.pop());});
  function snapshot(){storeDocumentEdits();return {activeIndex,documentEdits:[...documentEdits],files:[...files],stampFile:get('stamp-image')?.files[0]||null,retainedFiles:get('stamp-image')?.files[0]?[get('stamp-image').files[0]]:[],imageTurns:[...imageTurns],pageTurns:[...pageTurns],removed:[...removedPages],order:[...pageOrder],settings:settings()};}
  function remember(previous){const state=snapshot();if(previous)state.settings={...previous};edits.push(state);undo.update(edits.length,busy);}
  function defaultName(){const base=files[activeIndex]?.name.replace(/\.[^.]+$/,'')||'document';return stamps&&files.length>1?'stamped-documents.zip':extra?base+'-'+(tool==='extract-images'?'images.zip':'result.pdf'):jpg?'images.pdf':raster?base+'-images.zip':split?(get('split-mode').value==='each'?base+'-pages.zip':base+'-extracted.pdf'):base+'-rotated.pdf';}
@@ -48,7 +48,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   onPageAction:pageEditing?(kind,index)=>{if(kind==='insert'){insertAfter=index;insertInput.click();}else void editPages(kind,index);}:null,
   selection:count=>tool==='compress-pdf'||(split&&get('split-mode').value==='each')?new Set(remaining(count)):selectedPages(count),
   disabled:()=>busy||tool==='compress-pdf'||(split&&get('split-mode').value==='each'),
-  order:count=>orderFor(count),onReady:count=>{if(pageOrder.length!==count)pageOrder=Array.from({length:count},(_,i)=>i);live?.request();},
+  order:count=>orderFor(count),onReady:count=>{if(pageOrder.length!==count)pageOrder=Array.from({length:count},(_,i)=>i);live?.request();workSession?.changed();},
   onMove:(from,to)=>{if(busy)return;remember();const order=[...orderFor(previews.cards.length)],a=order.indexOf(from),b=order.indexOf(to);order.splice(b,0,...order.splice(a,1));pageOrder=order;if((raster||(split&&get('split-mode').value==='range'))&&get('page-range').value.trim()){const selected=selectedPages(previews.cards.length);get('page-range').value=pageOrder.filter(i=>selected.has(i)).map(i=>i+1).join(',');}invalidate();previews.refresh();},
   busy:()=>busy,removed:index=>removedPages.has(index),
   angle:(index,count)=>(turn(index)+(tool==='rotate-pdf'&&selectedPages(count).has(index)?Number(get('rotation').value):0))%360,
@@ -67,7 +67,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  function indicesFor(state,count){const order=state.order.length===count?state.order:Array.from({length:count},(_,i)=>i),removed=new Set(state.removed);if(!state.range.trim())return order.filter(i=>!removed.has(i));const result=new Set();for(const part of state.range.split(',')){const m=/^\s*(\d+)\s*(?:-\s*(\d+)\s*)?$/.exec(part);if(!m)throw Error(tr('Invalid page range.','Некорректный диапазон страниц.'));const start=Number(m[1]),end=Number(m[2]||m[1]);if(start<1||end<start||end>count)throw Error(tr('Page range exceeds document length.','Диапазон превышает число страниц документа.'));for(let i=start;i<=end;i++)if(!removed.has(i-1))result.add(i-1);}if(!result.size)throw Error(tr('Choose at least one page.','Выберите хотя бы одну страницу.'));return [...result];}
  if(stamps){live=new LiveStampPreview({tool,helper:previews,file:()=>files[activeIndex],status:get('live-preview-status'),t:tr,state:count=>({order:remaining(count),selected:indices(count),turns:new Map(pageTurns),settings:settings(),imageFile:get('stamp-image')?.files[0]})});}
  function clearResults() { urls.forEach(url=>URL.revokeObjectURL(url)); urls=[]; results.replaceChildren();savePanel.invalidate(); }
- function invalidate() { clearResults();savePanel.invalidate();savePanel.setDefault(defaultName());lastSettings=settings();storeDocumentEdits();live?.request(); feedback.removeAttribute('data-state');feedback.textContent=''; }
+ function invalidate() { clearResults();savePanel.invalidate();savePanel.setDefault(defaultName());lastSettings=settings();storeDocumentEdits();live?.request(); feedback.removeAttribute('data-state');feedback.textContent='';workSession?.changed(); }
  if(split){const mode=get('split-mode').closest('.pdf-settings'),primary=document.createElement('div');primary.className='primary-tool-options';mode.before(primary);primary.append(mode);get('pdf-page-previews').before(primary);}
  if(jpg){const options=document.createElement('div');options.className='lab-options image-options';options.append(get('page-size').closest('.pdf-settings'));savePanel.panel.querySelector('label').before(options);}
  if(extra&&root.querySelector('.lab-options')){const options=root.querySelector('.lab-options');options.classList.add('stamp-options');savePanel.panel.querySelector('label').before(options);}
@@ -122,7 +122,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
    }
    item.append(overlay,controls);list.append(item);
   });
-  run.disabled=busy||files.length<(merge?2:1);
+  run.disabled=busy||files.length<(merge?2:1);workSession?.changed();
  }
  function addFiles(incoming) {
   if(busy) return;
@@ -165,8 +165,8 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  }
  function download(bytes,name,mime='application/pdf') {
   const suggested=name;name=savePanel.outputName(suggested);
-  const url=URL.createObjectURL(new Blob([bytes],{type:mime}));urls.push(url);
-  const link=document.createElement('a');link.href=url;link.download=name;link.className='download-button';link.textContent=`↓ ${name}`;results.append(link);savePanel.complete(suggested,bytes.length);
+  const blob=new Blob([bytes],{type:mime}),url=URL.createObjectURL(blob);urls.push(url);
+  const link=document.createElement('a');link.href=url;link.download=name;link.className='download-button';link.textContent=`↓ ${name}`;results.append(link);savePanel.complete(suggested,bytes.length);savePanel.setOutput(blob,{name:suggested});
  }
  async function loadPdf(file) {
   try {
@@ -274,5 +274,6 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  });
  FileWorkspace.reorder(list,{selector:'li[data-file-index]',key:card=>Number(card.dataset.fileIndex),busy:()=>busy,onMove:(from,to)=>{remember();files.splice(to,0,...files.splice(from,1));invalidate();render();}});
  syncExtraOptions();lastSettings=settings();
+ workSession=FileWorkflow.workspace({root,capture:snapshot,busy:()=>busy,restore:async state=>{if(!state.files?.length||state.files.reduce((n,f)=>n+f.size,0)>MAX_TOTAL)throw Error();edits.clear();applyState(state);if(previews)await previews.ready;render();},receive:async file=>{addFiles([file]);if(previews)await previews.ready;if(!files.includes(file))throw Error();}});
  window.addEventListener('pagehide',clearResults);
 })();

@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "start": "python server.py",
-    "check": "node --check app.js && node --check catalog.js && node --check pdf-tools.js && node --check scripts/build.mjs && node --check scripts/catalog.mjs && node --check scripts/pdf-page.mjs && node --check pdf-organizer.js && node --check scripts/organize-page.mjs && node --check pdf-thumbnails.js && node --check workspace-ui.js && node --check image-lab.js && node --check scripts/image-lab-page.mjs && node --check pdf-extras.js && node --check scripts/pdf-extra-page.mjs && node --check live-stamp.js && node --check i18n.js && node --check scripts/localization.mjs && node --check scripts/seo-content.mjs && node --check scripts/tool-icons.mjs && node --check pdf-page-actions.js"
+    "check": "node --check workflow.js && node --check app.js && node --check catalog.js && node --check pdf-tools.js && node --check scripts/build.mjs && node --check scripts/catalog.mjs && node --check scripts/pdf-page.mjs && node --check pdf-organizer.js && node --check scripts/organize-page.mjs && node --check pdf-thumbnails.js && node --check workspace-ui.js && node --check image-lab.js && node --check scripts/image-lab-page.mjs && node --check pdf-extras.js && node --check scripts/pdf-extra-page.mjs && node --check live-stamp.js && node --check i18n.js && node --check scripts/localization.mjs && node --check scripts/seo-content.mjs && node --check scripts/tool-icons.mjs && node --check pdf-page-actions.js"
   },
   "engines": {
     "node": ">=22.13.0"

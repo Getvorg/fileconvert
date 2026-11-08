@@ -4,7 +4,7 @@ const mode=root.dataset.imageLab,resize=mode==='resize',crop=mode==='crop',conve
 const input=get('lab-files'),cards=get('lab-cards'),run=get('lab-run'),results=get('lab-results'),feedback=get('lab-feedback');
 const panel=FileWorkspace.savePanel({root,button:run,results,name:resize?'resized.zip':'compressed.zip'}),edits=FileWorkspace.history();
 const optionPanel=root.querySelector('.lab-options');optionPanel.classList.add('image-options');panel.panel.querySelector('label').before(optionPanel);
-let records=[],busy=false,downloadURL=null,previousSettings={},dragSerial=0;
+let records=[],busy=false,downloadURL=null,previousSettings={},dragSerial=0,workSession=null;
 const optionIds=['lab-width','lab-height','lab-fit','lab-upscale','lab-format','lab-quality','lab-background','crop-ratio'];
 const settings=()=>Object.fromEntries(optionIds.filter(id=>get(id)).map(id=>[id,get(id).type==='checkbox'?get(id).checked:get(id).value]));
 const snapshot=()=>({files:records.map(r=>r.file),records:records.map(({file,width,height,turn,key,crop})=>({file,width,height,turn,key,crop:{...crop}})),settings:settings()});
@@ -13,7 +13,7 @@ function remember(old){const state=snapshot();if(old)state.settings={...old};edi
 function extension(mime){return mime==='image/jpeg'?'jpg':mime==='image/webp'?'webp':'png';}
 function mimeFor(record){return get('lab-format').value==='original'?(['image/jpeg','image/png','image/webp'].includes(record.file.type)?record.file.type:(/\.webp$/i.test(record.file.name)?'image/webp':/\.png$/i.test(record.file.name)?'image/png':'image/jpeg')):get('lab-format').value;}
 function suggested(){if(records.length===1)return records[0].file.name.replace(/\.[^.]+$/,'')+('-'+suffix+'.')+extension(mimeFor(records[0]));return suffix+'.zip';}
-function invalidate(){FileWorkspace.closePreview();if(downloadURL)URL.revokeObjectURL(downloadURL);downloadURL=null;results.replaceChildren();panel.invalidate();panel.setDefault(suggested());feedback.textContent='';previousSettings=settings();}
+function invalidate(){FileWorkspace.closePreview();if(downloadURL)URL.revokeObjectURL(downloadURL);downloadURL=null;results.replaceChildren();panel.invalidate();panel.setDefault(suggested());feedback.textContent='';previousSettings=settings();workSession?.changed();}
 function render(){
  get('lab-background').closest('.pdf-settings').hidden=get('lab-format').value!=='image/jpeg';
  get('lab-quality').closest('.pdf-settings').hidden=get('lab-format').value==='image/png'||(get('lab-format').value==='original'&&records.length>0&&records.every(r=>mimeFor(r)==='image/png'));
@@ -33,6 +33,7 @@ function render(){
   for(const [kind,offset] of [['previous',-1],['next',1]]){const button=FileWorkspace.action(kind,t('Move image','Переместить изображение'),()=>{if(busy)return;remember();records.splice(index+offset,0,...records.splice(index,1));invalidate();render();});button.disabled=busy||index+offset<0||index+offset>=records.length;move.append(button);}
   item.append(handle,frame,actions,label,meta,move);cards.append(item);if(crop)mountCrop(record,frame,item);
  });
+ workSession?.changed();
 }
 async function addFiles(files){
  if(busy||!files.length)return;const batch=Array.from(files);
@@ -71,7 +72,7 @@ run.addEventListener('click',async()=>{
    const name=`image-${String(++done).padStart(3,'0')}.${extension(mime)}`;archive[name]=new Uint8Array(await blob.arrayBuffer());single=blob;singleName=record.file.name.replace(/\.[^.]+$/,'')+('-'+suffix+'.')+extension(mime);panel.progress(done,records.length,t(`Images: ${done} / ${records.length}`,`Изображения: ${done} / ${records.length}`));await new Promise(resolve=>setTimeout(resolve,0));
   }
   let blob=single,name=singleName;if(records.length>1){panel.wait(t('Packaging ZIP…','Упаковка ZIP…'));await new Promise(resolve=>setTimeout(resolve,0));blob=new Blob([zipSync(archive,{level:0})],{type:'application/zip'});name=suffix+'.zip';}
-  downloadURL=URL.createObjectURL(blob);const link=document.createElement('a');link.href=downloadURL;link.download=panel.outputName(name);link.className='download-button';link.textContent='↓ '+link.download;results.append(link);panel.complete(name,blob.size);
+  downloadURL=URL.createObjectURL(blob);const link=document.createElement('a');link.href=downloadURL;link.download=panel.outputName(name);link.className='download-button';link.textContent='↓ '+link.download;results.append(link);panel.complete(name,blob.size);panel.setOutput(blob,{name,originals:records.map(record=>({file:record.file,angle:record.turn}))});
   const percent=((inputTotal-total)/inputTotal*100).toFixed(1);feedback.textContent=`${FileWorkspace.formatBytes(inputTotal)} → ${FileWorkspace.formatBytes(total)}. `+(total<=inputTotal?t(`Image data reduced by ${percent}%.`,`Объём изображений уменьшен на ${percent}%.`):t('Image data is larger; compare before using.','Объём изображений вырос; сравните результат перед использованием.'));link.focus();
  }catch(error){if(downloadURL)URL.revokeObjectURL(downloadURL);downloadURL=null;results.replaceChildren();panel.fail();feedback.textContent=error.message;}
  finally{busy=false;panel.idle();render();}
@@ -92,3 +93,5 @@ function mountCrop(record,frame,item){
  wrap.addEventListener('pointermove',e=>{if(!start)return;e.preventDefault();const p=point(e),dx=p.x-start.x,dy=p.y-start.y;let w=Math.abs(dx),h=Math.abs(dy);const ratio=Number(get('crop-ratio').value),ow=record.turn%180?record.height:record.width,oh=record.turn%180?record.width:record.height;if(ratio){const r=ratio*oh/ow;if(w>h*r)h=w/r;else w=h*r;}const scale=Math.min(1,(dx<0?start.x:1-start.x)/(w||1),(dy<0?start.y:1-start.y)/(h||1));w*=scale;h*=scale;if(w>0&&h>0)record.crop={x:dx<0?start.x-w:start.x,y:dy<0?start.y-h:start.y,w,h};update();});
  wrap.addEventListener('pointerup',()=>{start=null;});wrap.addEventListener('pointercancel',()=>{start=null;});update();
 }
+
+workSession=FileWorkflow.workspace({root,capture:snapshot,busy:()=>busy,restore:async state=>{if(!state.files?.length||state.files.reduce((n,f)=>n+f.size,0)>50*1024*1024)throw Error();records.forEach(record=>URL.revokeObjectURL(record.url));records=state.records.map(record=>({...record,url:URL.createObjectURL(record.file)}));dragSerial=Math.max(0,...records.map(record=>record.key));for(const [id,value] of Object.entries(state.settings||{})){if(!get(id))continue;if(get(id).type==='checkbox')get(id).checked=value;else get(id).value=value;}edits.clear();invalidate();render();},receive:async file=>{await addFiles([file]);if(!records.some(record=>record.file===file))throw Error();}});
