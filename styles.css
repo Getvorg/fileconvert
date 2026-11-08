@@ -49,3 +49,19 @@ main:has(.workspace-with-save){max-width:1280px}.workspace-with-save{display:gri
 .viewer-controls{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;position:sticky;top:38px;background:#f6f5fa;z-index:2;padding:10px;border-radius:10px}.viewer-controls>button:not(.workspace-action){border:1px solid #ded8e5;background:white;color:#51445b;border-radius:7px;padding:8px 12px;cursor:pointer}.viewer-controls>span{font-size:12px;min-width:110px;text-align:center}.viewer-zoomed canvas{max-width:none!important}.shared-preview-dialog:fullscreen,#page-preview-dialog:fullscreen,.viewer-expanded{width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;border-radius:0!important}.viewer-expanded{position:fixed;inset:0}.card-insert-controls{display:flex;justify-content:center;gap:8px;margin-top:9px}.card-insert-controls .workspace-action{border-radius:8px;background:white;color:#63516c}.batch-preview-picker{display:flex;gap:10px;align-items:center;font-size:12px;margin:15px 0}.batch-preview-picker[hidden]{display:none}.batch-preview-picker select{min-width:0;max-width:65%;font-size:12px}#live-preview-status{font-size:12px;line-height:1.6;color:#85718d}.editor-document{flex-wrap:wrap}.viewer-controls button:disabled{opacity:.35}@media(max-width:540px){.viewer-controls{gap:6px;top:42px;padding:7px}.viewer-controls>span{min-width:90px}.viewer-controls>button:not(.workspace-action){padding:8px}.batch-preview-picker{flex-wrap:wrap}.batch-preview-picker select{max-width:100%}}
 .batch-preview-help{font-size:.875rem;line-height:1.6;color:var(--muted,#777);margin:.75rem 0} 
 .language-picker{position:relative;font-size:14px;z-index:30;flex-shrink:0}.language-picker summary{cursor:pointer;color:#b93745;border:1px solid #eadfe3;border-radius:9px;padding:9px 12px;list-style:none}.language-picker summary::after{content:' ▾'}.language-picker summary::-webkit-details-marker{display:none}.language-picker nav{position:absolute;right:0;top:calc(100% + 8px);display:flex;flex-direction:column;gap:0;padding:6px;min-width:170px;background:#fff;border:1px solid #e8e1e9;border-radius:12px;box-shadow:0 10px 30px #30252b18;max-height:70vh;overflow:auto}.language-picker a{padding:10px 12px;text-align:left;border-radius:7px}.language-picker a[aria-current=page],.language-picker a:hover{background:#fff0f1}.language-picker summary:focus-visible{outline:3px solid #b93745;outline-offset:3px}
+/* Arabic layout: keep document geometry and page order independent of UI direction. */
+[dir=rtl] .brand{direction:ltr;unicode-bidi:isolate;display:inline-block}
+[dir=rtl] .language-picker nav{right:auto;left:0}
+[dir=rtl] .language-picker a{text-align:start;direction:ltr;unicode-bidi:isolate}
+[dir=rtl] .nav-menu{left:auto;right:0}
+[dir=rtl] .nav-menu a{text-align:right}
+[dir=rtl] .page-grid,[dir=rtl] .image-card-grid,[dir=rtl] .viewer-controls,[dir=rtl] .card-move-controls{direction:ltr}
+[dir=rtl] .page-card{direction:rtl}
+[dir=rtl] .page-overlay{right:auto;left:12px;direction:ltr}
+[dir=rtl] .preview-page-choice .page-drag{margin-left:0;margin-inline-start:auto}
+[dir=rtl] .image-card-grid>.page-card>.page-drag{left:auto;right:12px}
+[dir=rtl] .editor-document .secondary-button{margin-left:0;margin-inline-start:auto}
+[dir=rtl] input[type=number],[dir=rtl] #page-range,[dir=rtl] #output-name{direction:ltr;text-align:left}
+[dir=rtl] .viewer-controls button svg{direction:ltr}
+.language-picker nav{flex-wrap:nowrap;justify-content:flex-start;overscroll-behavior:contain}
+.language-picker a{flex-shrink:0}

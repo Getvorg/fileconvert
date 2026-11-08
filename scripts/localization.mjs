@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-export const languages={en:'English',ru:'Русский',uk:'Українська',de:'Deutsch',it:'Italiano',es:'Español',pl:'Polski','pt-BR':'Português (Brasil)',fr:'Français',ja:'日本語',ko:'한국어',id:'Bahasa Indonesia'};
+export const languages={en:'English',ru:'Русский',uk:'Українська',de:'Deutsch',it:'Italiano',es:'Español',pl:'Polski','pt-BR':'Português (Brasil)',fr:'Français',ja:'日本語',ko:'한국어',id:'Bahasa Indonesia',tr:'Türkçe',vi:'Tiếng Việt',nl:'Nederlands',ar:'العربية','zh-Hans':'简体中文',cs:'Čeština',ro:'Română',hu:'Magyar',el:'Ελληνικά',th:'ไทย'};
 export const dictionaries=Object.fromEntries(Object.keys(languages).filter(code=>!['en','ru'].includes(code)).map(code=>[code,JSON.parse(fs.readFileSync(new URL(`../locales/${code}.json`,import.meta.url),'utf8'))]));
 export const localePrefix=code=>code==='en'?'/':`/${code}/`;
 const decode=value=>value.replace(/&(?:amp|quot|lt|gt|apos|#39|nbsp|#\d+|#x[\da-f]+);/gi,entity=>({ '&amp;':'&','&quot;':'"','&lt;':'<','&gt;':'>','&apos;':"'",'&#39;':"'",'&nbsp;':'\u00a0' }[entity]??String.fromCodePoint(entity.startsWith('&#x')?parseInt(entity.slice(3),16):parseInt(entity.slice(2),10))));

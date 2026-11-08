@@ -3,7 +3,7 @@ import json,re,html,subprocess
 from pathlib import Path
 from html.parser import HTMLParser
 ROOT=Path(__file__).resolve().parents[1]
-LOCALES=['en','ru','uk','de','it','es','pl','pt-BR','fr','ja','ko','id']
+LOCALES=['en','ru','uk','de','it','es','pl','pt-BR','fr','ja','ko','id','tr','vi','nl','ar','zh-Hans','cs','ro','hu','el','th']
 class Page(HTMLParser):
  def __init__(self,text):super().__init__();self.tags=[];self.text=[];self.feed(text)
  def handle_starttag(self,tag,attrs):self.tags.append((tag,dict(attrs)))
@@ -22,14 +22,14 @@ for lang,dictionary in messages.items():
   if 'FileConvert' in key:assert 'FileConvert' in value,(lang,key,value)
 for relative in english:
  source=Page((ROOT/'dist'/relative).read_text())
- neutral={'File','Convert','English','Deutsch','Italiano','Español','Polski','Português (Brasil)','Français','Bahasa Indonesia','WebP','W','PNG','JPG','DPI'}
+ neutral={'File','Convert','English','Deutsch','Italiano','Español','Polski','Português (Brasil)','Français','Bahasa Indonesia','Türkçe','Tiếng Việt','Nederlands','Čeština','Română','Magyar','WebP','W','PNG','JPG','DPI'}
  for text in source.text:
   if re.search('[a-zA-Z]',text) and text not in neutral and not re.fullmatch(r'\d+ DPI',text):assert text in keys,('missing source text',text)
 
  for lang in LOCALES:
   prefix='' if lang=='en' else lang+'/'
   path=ROOT/'dist'/prefix/relative;raw=path.read_text();page=Page(raw)
-  assert ('html',{'lang':lang}) in page.tags,(path,'lang')
+  assert ('html',{'lang':lang,**({'dir':'rtl'} if lang=='ar' else {})}) in page.tags,(path,'lang')
   links=[attrs for tag,attrs in page.tags if tag=='a' and 'hreflang' in attrs]
   assert {a['hreflang'] for a in links}==set(LOCALES),(path,'language picker')
   assert sum(a.get('aria-current')=='page' for a in links)==1
@@ -59,4 +59,4 @@ for path in ROOT.glob('*.js'):
   def placeholder(m):n=index[0];index[0]+=1;return '{'+str(n)+'}'
   if literal.startswith('`'):value=re.sub(r'\$\{[^}]+\}',placeholder,value)
   if re.search('[a-zA-Z]',value):assert value.strip() in keys,(path,value)
-print('PASS: 300 localized pages, 10 complete dictionaries, dynamic placeholders, language links, asset order and SEO alternates')
+print('PASS: 550 localized pages, 20 complete dictionaries, dynamic placeholders, language links, asset order and SEO alternates')

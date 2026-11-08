@@ -47,6 +47,7 @@ for (const lang of Object.keys(languages)) {
   }
   html=html.replace(/(<[a-z0-9]+[^>]*data-i18n="([^"]+)"[^>]*>)([^<]*)(<\/[^>]+>)/g,(_,a,k,b,c)=>a+(translations[ru?'ru':'en'][k]||b)+c);
   html=localizeHtml(html,lang);
+  if(lang==='ar')html=html.replace('<html lang="ar">','<html lang="ar" dir="rtl">');
   const dir = 'dist'+path; fs.mkdirSync(dir,{recursive:true}); fs.writeFileSync(dir+'index.html',html);
  }
  for(const slug of ['jpg-to-png','png-to-jpg']) {
