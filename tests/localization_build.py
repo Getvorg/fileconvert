@@ -3,7 +3,7 @@ import json,re,html,subprocess
 from pathlib import Path
 from html.parser import HTMLParser
 ROOT=Path(__file__).resolve().parents[1]
-LOCALES=['en','ru','uk','de','it','es','pl']
+LOCALES=['en','ru','uk','de','it','es','pl','pt-BR','fr','ja','ko','id']
 class Page(HTMLParser):
  def __init__(self,text):super().__init__();self.tags=[];self.text=[];self.feed(text)
  def handle_starttag(self,tag,attrs):self.tags.append((tag,dict(attrs)))
@@ -22,7 +22,7 @@ for lang,dictionary in messages.items():
   if 'FileConvert' in key:assert 'FileConvert' in value,(lang,key,value)
 for relative in english:
  source=Page((ROOT/'dist'/relative).read_text())
- neutral={'File','Convert','English','Deutsch','Italiano','Español','Polski','WebP','W','PNG','JPG','DPI'}
+ neutral={'File','Convert','English','Deutsch','Italiano','Español','Polski','Português (Brasil)','Français','Bahasa Indonesia','WebP','W','PNG','JPG','DPI'}
  for text in source.text:
   if re.search('[a-zA-Z]',text) and text not in neutral and not re.fullmatch(r'\d+ DPI',text):assert text in keys,('missing source text',text)
 
@@ -59,4 +59,4 @@ for path in ROOT.glob('*.js'):
   def placeholder(m):n=index[0];index[0]+=1;return '{'+str(n)+'}'
   if literal.startswith('`'):value=re.sub(r'\$\{[^}]+\}',placeholder,value)
   if re.search('[a-zA-Z]',value):assert value.strip() in keys,(path,value)
-print('PASS: 175 localized pages, 5 complete dictionaries, dynamic placeholders, language links, asset order and SEO alternates')
+print('PASS: 300 localized pages, 10 complete dictionaries, dynamic placeholders, language links, asset order and SEO alternates')

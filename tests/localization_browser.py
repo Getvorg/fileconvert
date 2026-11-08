@@ -1,5 +1,5 @@
 """Exercise translated runtime controls and actual exports under production CSP."""
-import io,json,tomllib
+import io,json,tomllib,os
 from pathlib import Path
 import fitz
 from PIL import Image
@@ -24,7 +24,7 @@ with sync_playwright() as p:
  def host(route):
   response=route.fetch();route.fulfill(response=response,headers={**response.headers,**headers})
  context.route(BASE+'/**',host)
- for lang in ['uk','de','it','es','pl']:
+ for lang in os.environ.get('TEST_LANGUAGES','uk,de,it,es,pl,pt-BR,fr,ja,ko,id').split(','):
   d=json.loads(Path('locales',lang+'.json').read_text());prefix='/'+lang+'/'
   page.goto(BASE+prefix);expect(page.locator('.tool-card')).to_have_count(21);page.locator('[data-filter=edit]').click();expect(page.locator('#catalog-status')).to_have_text(interpolate(d,'{0} tools',3))
   page.goto(BASE+prefix+'number-pdf/');expect(page.locator('.save-panel h2')).to_have_text(d['Your result'])
@@ -40,7 +40,7 @@ with sync_playwright() as p:
   doc=fitz.open(download.value.path());assert len(doc)==2 and '12' in doc[0].get_text() and '13' in doc[1].get_text()
   number=[w for w in doc[0].get_text('words') if w[4]=='12'][0];assert abs((number[0]+number[2])/2/300-.25)<.03
   # Switching languages preserves the tool path and native language names.
-  page.locator('.language-picker summary').click();expect(page.locator('.language-picker a')).to_have_count(7)
+  page.locator('.language-picker summary').click();expect(page.locator('.language-picker a')).to_have_count(12)
   page.locator('.language-picker [hreflang=de]').click();expect(page).to_have_url(BASE+'/de/number-pdf/')
   page.goto(BASE+prefix+'watermark-pdf/');expect(page.locator('#stamp-text')).to_have_value(d['SAMPLE']);page.locator('#stamp-text').fill('DOCUMENT NOT TRANSLATED');expect(page.locator('#stamp-text')).to_have_value('DOCUMENT NOT TRANSLATED')
   page.goto(BASE+prefix+'merge-pdf/');page.locator('#editor-file').set_input_files(upload('UNCHANGED.pdf',pdf(),'application/pdf'));expect(page.locator('.page-card')).to_have_count(2)
@@ -55,4 +55,4 @@ with sync_playwright() as p:
  assert not errors,errors
  assert not external,external
  browser.close()
-print('PASS: five new languages, translated dynamic cards/status/errors/save/viewer, PDF/image exports, no stamp drag handle, native language switching, mobile and local-only requests')
+print('PASS: selected languages, translated dynamic cards/status/errors/save/viewer, PDF/image exports, no stamp drag handle, native language switching, mobile and local-only requests')
