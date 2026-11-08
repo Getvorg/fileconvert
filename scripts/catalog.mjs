@@ -1,11 +1,13 @@
+import {toolIcon} from './tool-icons.mjs';
 export const groups = {
- all: ['All tools', 'Все инструменты'],
- organize: ['Organize PDF', 'Организовать PDF'],
- convert: ['Convert to PDF', 'Конвертировать в PDF'],
- optimize:['Optimize PDF','Оптимизация PDF'],
- frompdf: ['Convert from PDF','Преобразовать из PDF'],
- edit: ['Edit PDF', 'Редактировать PDF'],
- images: ['Images', 'Изображения'],
+ all:['All tools','Все инструменты'],
+ organize:['PDF pages','Страницы PDF'],
+ convert:['Convert to PDF','Конвертировать в PDF'],
+ frompdf:['Convert from PDF','Преобразовать из PDF'],
+ edit:['Numbers and watermarks','Номера и водяные знаки'],
+ optimize:['Compress files','Сжатие файлов'],
+ images:['Edit images','Редактирование изображений'],
+ imageconvert:['Image formats','Форматы изображений'],
 };
 export const tools = [
  {slug:'number-pdf',group:'edit',icon:'#',name:['Page numbers','Номера страниц'],description:['Add page numbers with custom position, size and color.','Добавьте номера страниц с настройкой положения, размера и цвета.']},
@@ -30,11 +32,17 @@ export const tools = [
  {slug:'jpg-to-png', group:'images', icon:'PNG', name:['JPG to PNG','JPG в PNG'], description:['Convert JPG images to PNG without further compression loss.','Преобразуйте JPG в PNG без дополнительных потерь при сжатии.']},
  {slug:'png-to-jpg', group:'images', icon:'JPG', name:['PNG to JPG','PNG в JPG'], description:['Convert PNG to JPG and choose a background for transparent areas.','Преобразуйте PNG в JPG и выберите фон для прозрачных областей.']},
 ];
-export function toolNavigation(ru, prefix) {
+const preferred=['merge-pdf','split-pdf','compress-pdf','organize-pdf','jpg-to-pdf','pdf-to-jpg','compress-image','resize-image'];
+const conversionSlugs=['jpg-to-png','png-to-jpg','webp-to-jpg','webp-to-png','jpg-to-webp','png-to-webp'];
+for(const tool of tools){if(conversionSlugs.includes(tool.slug))tool.group='imageconvert';if(tool.slug==='compress-image')tool.group='optimize';if(tool.slug==='rotate-pdf')tool.group='organize';}
+const originalOrder=tools.map(t=>t.slug);
+tools.sort((a,b)=>(preferred.includes(a.slug)?preferred.indexOf(a.slug):preferred.length+originalOrder.indexOf(a.slug))-(preferred.includes(b.slug)?preferred.indexOf(b.slug):preferred.length+originalOrder.indexOf(b.slug)));
+export function toolNavigation(ru,prefix){
  const i=Number(ru);
- return `<nav class="tool-navigation" aria-label="${ru?'Инструменты':'Tools'}"><a href="${prefix}#tools">${groups.all[i]}</a>${Object.entries(groups).filter(([g])=>g!=='all').map(([group,label])=>`<details class="nav-group"><summary>${label[i]}</summary><div class="nav-menu">${tools.filter(t=>t.group===group).map(t=>`<a href="${prefix}${t.slug}/">${t.name[i]}</a>`).join('')}</div></details>`).join('')}</nav>`;
+ const menu=(kind,title)=>`<details class="nav-group" data-nav-kind="${kind}"><summary>${title}</summary><div class="nav-menu">${Object.entries(groups).filter(([key])=>key!=='all').map(([key,label])=>{const items=tools.filter(t=>t.group===key&&(kind==='pdf'?!['images','imageconvert'].includes(t.group)&&t.slug!=='compress-image':t.group==='images'||t.group==='imageconvert'||t.slug==='compress-image'));return items.length?`<section class="nav-section"><h2>${label[i]}</h2>${items.map(t=>`<a href="${prefix}${t.slug}/">${toolIcon(t.slug)}<span>${t.name[i]}</span></a>`).join('')}</section>`:'';}).join('')}</div></details>`;
+ return `<nav id="main-navigation" class="tool-navigation" aria-label="${ru?'Инструменты':'Tools'}">${menu('pdf','PDF')}${menu('images',ru?'Изображения':'Images')}<a class="header-guides" href="${prefix}guides/">${ru?'Инструкции':'Guides'}</a></nav>`;
 }
 export function catalog(ru,prefix) {
  const i=Number(ru);
- return `<main class="catalog"><section class="hero"><span class="eyebrow">${ru?'БЕСПЛАТНО · В БРАУЗЕРЕ · БЕЗ РЕГИСТРАЦИИ':'FREE · IN YOUR BROWSER · NO SIGN-UP'}</span><h1>${ru?'Инструменты для PDF и изображений':'PDF and image tools, made simple'}</h1><p class="subtitle">${ru?'Объединяйте, разделяйте и поворачивайте PDF, создавайте документы из изображений, экспортируйте страницы и оптимизируйте фотографии. Ваши файлы остаются на устройстве.':'Merge, split and rotate PDFs, create documents from images, export pages, and optimize photos. Your files stay on your device.'}</p></section><section id="tools" aria-label="${groups.all[i]}"><div class="category-filters" role="group" aria-label="${ru?'Категории':'Categories'}">${Object.entries(groups).map(([g,label])=>`<button type="button" data-filter="${g}" aria-pressed="${g==='all'}">${label[i]}</button>`).join('')}</div><div class="tool-grid">${tools.map(t=>`<a class="tool-card ${t.group}" href="${prefix}${t.slug}/" data-category="${t.group}"><span class="tool-icon" aria-hidden="true">${t.icon}</span><h2>${t.name[i]}</h2><p>${t.description[i]}</p><span class="card-action">${ru?'Открыть инструмент':'Open tool'} <span aria-hidden="true">→</span></span></a>`).join('')}</div><p id="catalog-status" class="sr-only" role="status" aria-live="polite"></p></section><section class="catalog-note"><h2>${ru?'Простая работа с файлами':'A simpler way to work with files'}</h2><p>${ru?'Выберите инструмент, добавьте файлы и сохраните результат. Все инструменты работают локально в браузере, без отправки ваших документов на сервер. Для каждой операции есть инструкция и описание ограничений.':'Choose a tool, add files and save the result. All tools process files locally in your browser without uploading documents to a server. Each tool includes instructions and explains its limits.'}</p></section></main>`;
+ return `<main class="catalog"><section class="hero"><span class="eyebrow">${ru?'БЕСПЛАТНО · В БРАУЗЕРЕ · БЕЗ РЕГИСТРАЦИИ':'FREE · IN YOUR BROWSER · NO SIGN-UP'}</span><h1>${ru?'Инструменты для PDF и изображений':'PDF and image tools, made simple'}</h1><p class="subtitle">${ru?'Объединяйте, разделяйте и поворачивайте PDF, создавайте документы из изображений, экспортируйте страницы и оптимизируйте фотографии. Ваши файлы остаются на устройстве.':'Merge, split and rotate PDFs, create documents from images, export pages, and optimize photos. Your files stay on your device.'}</p></section><section id="tools" aria-label="${groups.all[i]}"><div class="category-filters" role="group" aria-label="${ru?'Категории':'Categories'}">${Object.entries(groups).map(([g,label])=>`<button type="button" data-filter="${g}" aria-pressed="${g==='all'}">${label[i]}</button>`).join('')}</div><div class="tool-grid">${tools.map(t=>`<a class="tool-card ${t.group}" href="${prefix}${t.slug}/" data-category="${t.group}"><span class="tool-icon" aria-hidden="true">${toolIcon(t.slug)}</span><h2>${t.name[i]}</h2><p>${t.description[i]}</p></a>`).join('')}</div><p id="catalog-status" class="sr-only" role="status" aria-live="polite"></p></section><section class="catalog-note"><h2>${ru?'Простая работа с файлами':'A simpler way to work with files'}</h2><p>${ru?'Выберите инструмент, добавьте файлы и сохраните результат. Все инструменты работают локально в браузере, без отправки ваших документов на сервер. Для каждой операции есть инструкция и описание ограничений.':'Choose a tool, add files and save the result. All tools process files locally in your browser without uploading documents to a server. Each tool includes instructions and explains its limits.'}</p></section></main>`;
 }

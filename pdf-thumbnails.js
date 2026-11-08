@@ -24,7 +24,7 @@ export class PDFThumbnails {
     const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.setAttribute('aria-label',this.options.t(`Use page ${index+1}`,`Использовать страницу ${index+1}`));
     checkbox.addEventListener('change',()=>{this.options.onToggle(index,doc.numPages);this.refresh();});
     label.append(checkbox,document.createTextNode(this.options.t(`Page ${index+1}`,`Страница ${index+1}`)));
-    const handle=document.createElement('span');handle.className='page-drag';handle.textContent='⠿';handle.draggable=true;handle.title=this.options.t('Drag to reorder','Перетащите для изменения порядка');label.append(handle);
+    const handle=document.createElement('span');handle.className='page-drag';handle.textContent='⠿';handle.draggable=true;handle.title=this.options.t('Drag to reorder','Перетащите для изменения порядка');handle.setAttribute('aria-hidden','true');const top=document.createElement('div');top.className='page-card-top';top.append(label,handle);
     const frame=document.createElement('div');frame.className='page-thumbnail';
     const img=document.createElement('img');img.alt=this.options.t(`Preview of page ${index+1}`,`Миниатюра страницы ${index+1}`);
     const status=document.createElement('span');status.className='thumbnail-status';frame.append(img,status);
@@ -37,7 +37,9 @@ export class PDFThumbnails {
      const button=FileWorkspace.action(kind,`${title}: ${index+1}`,()=>{if(this.options.busy())return;const order=this.options.order(doc.numPages).filter(i=>!this.options.removed(i)),position=order.indexOf(index),target=order[position+direction];if(target!==undefined)this.options.onMove(index,target);});move.append(button);
     }
     const position=document.createElement('span');position.className='page-position';
-    card.append(label,actions,frame,position,move);this.cards.push(card);this.container.append(card);this.observer.observe(card);
+    const additions=document.createElement('div');additions.className='card-insert-controls';
+    if(this.options.onPageAction)for(const [kind,title] of [['duplicate',this.options.t('Duplicate page','Дублировать страницу')],['blank',this.options.t('Blank A4 after page','Пустая A4 после страницы')],['insert',this.options.t('Insert files after page','Вставить файлы после страницы')]]){const button=FileWorkspace.action(kind,`${title} ${index+1}`,()=>{if(!this.options.busy())this.options.onPageAction(kind,index);});additions.append(button);}
+    card.append(top,actions,frame,position,additions,move);this.cards.push(card);this.container.append(card);this.observer.observe(card);
    }
    this.refresh();
   }catch{if(version===this.version){this.container.replaceChildren();const message=document.createElement('p');message.textContent=this.options.t('Preview unavailable. Check that the PDF is not encrypted or damaged.','Миниатюры недоступны. Проверьте, что PDF не зашифрован и не повреждён.');this.container.append(message);}}
@@ -46,7 +48,8 @@ export class PDFThumbnails {
   const count=this.cards.length, selected=this.options.selection(count), remaining=this.cards.filter((_,i)=>!this.options.removed(i)).length;
   for(let index=0;index<count;index++){
    const card=this.cards[index], removed=this.options.removed(index), checkbox=card.querySelector('input');card.hidden=removed;
-   checkbox.checked=selected.has(index);checkbox.disabled=this.options.disabled();card.classList.toggle('is-selected',checkbox.checked);
+   checkbox.checked=selected.has(index);checkbox.disabled=this.options.disabled();const selectable=this.options.selectable?.()??true;checkbox.hidden=!selectable;card.classList.toggle('is-selected',selectable&&checkbox.checked);
+   card.querySelectorAll('.card-insert-controls button').forEach(button=>button.disabled=this.options.busy()||count>=500);
    card.querySelector('[data-action=zoom]').disabled=this.options.busy();card.querySelector('.page-drag').draggable=!this.options.busy();
    card.querySelector('[data-action=rotate]').disabled=this.options.busy();card.querySelector('[data-action=delete]').disabled=this.options.busy()||remaining<=1;
    if(removed){this.visible.delete(index);this.release(card);}else if(this.visible.has(index))this.enqueue(index);

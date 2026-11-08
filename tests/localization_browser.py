@@ -26,7 +26,7 @@ with sync_playwright() as p:
  context.route(BASE+'/**',host)
  for lang in os.environ.get('TEST_LANGUAGES','uk,de,it,es,pl,pt-BR,fr,ja,ko,id,tr,vi,nl,ar,zh-Hans,cs,ro,hu,el,th').split(','):
   d=json.loads(Path('locales',lang+'.json').read_text());prefix='/'+lang+'/'
-  page.goto(BASE+prefix);expect(page.locator('.tool-card')).to_have_count(21);page.locator('[data-filter=edit]').click();expect(page.locator('#catalog-status')).to_have_text(interpolate(d,'{0} tools',3))
+  page.goto(BASE+prefix);expect(page.locator('.tool-card')).to_have_count(21);page.locator('[data-filter=edit]').click();expect(page.locator('#catalog-status')).to_have_text(interpolate(d,'{0} tools',2))
   page.goto(BASE+prefix+'number-pdf/');expect(page.locator('.save-panel h2')).to_have_text(d['Your result'])
   page.locator('#pdf-files').set_input_files(upload('DOCUMENT.pdf',pdf(),'application/pdf'));expect(page.locator('[data-preview-page]')).to_have_count(2)
   expect(page.locator('#live-preview-status')).to_have_text(d['Preview matches the saved result.'],timeout=20000);expect(page.locator('.stamp-move-handle')).to_have_count(0)

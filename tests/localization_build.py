@@ -22,7 +22,7 @@ for lang,dictionary in messages.items():
   if 'FileConvert' in key:assert 'FileConvert' in value,(lang,key,value)
 for relative in english:
  source=Page((ROOT/'dist'/relative).read_text())
- neutral={'File','Convert','English','Deutsch','Italiano','Español','Polski','Português (Brasil)','Français','Bahasa Indonesia','Türkçe','Tiếng Việt','Nederlands','Čeština','Română','Magyar','WebP','W','PNG','JPG','DPI'}
+ neutral={'File','Convert','English','Deutsch','Italiano','Español','Polski','Português (Brasil)','Français','Bahasa Indonesia','Türkçe','Tiếng Việt','Nederlands','Čeština','Română','Magyar','WebP','W','PDF','PNG','JPG','DPI'}
  for text in source.text:
   if re.search('[a-zA-Z]',text) and text not in neutral and not re.fullmatch(r'\d+ DPI',text):assert text in keys,('missing source text',text)
 

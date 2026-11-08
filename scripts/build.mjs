@@ -15,7 +15,7 @@ const translations = vm.runInNewContext(app.slice(app.indexOf('const translation
 const template = fs.readFileSync('templates/converter.html','utf8');
 fs.rmSync('dist',{recursive:true,force:true}); fs.mkdirSync('dist');
 for (const file of ['favicon.ico','favicon.png','favicon.svg','apple-touch-icon.png']) fs.copyFileSync(`assets/${file}`,`dist/${file}`);
-for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js','pdf-thumbnails.js','workspace-ui.js','image-lab.js','pdf-extras.js','live-stamp.js','i18n.js']) fs.copyFileSync(file,`dist/${file}`);
+for (const file of ['app.js','styles.css','catalog.js','pdf-tools.js','pdf-organizer.js','pdf-thumbnails.js','workspace-ui.js','image-lab.js','pdf-extras.js','live-stamp.js','i18n.js','pdf-page-actions.js']) fs.copyFileSync(file,`dist/${file}`);
 fs.mkdirSync('dist/vendor');
 fs.copyFileSync('node_modules/fflate/esm/browser.js','dist/vendor/fflate.mjs');
 fs.copyFileSync('node_modules/fflate/LICENSE','dist/vendor/fflate.LICENSE');
@@ -35,7 +35,7 @@ for (const lang of Object.keys(languages)) {
  const ru = lang === 'ru', prefix = localePrefix(lang);
  const labels = ru ? ['О проекте','Контакты','Конфиденциальность','Инструкции'] : ['About','Contact','Privacy Policy','Guides'];
  const footerNav = `<nav aria-label="${ru?'Информация':'Information'}">${['about','contact','privacy','guides'].map((p,i)=>`<a href="${prefix}${p}/">${labels[i]}</a>`).join('')}</nav>`;
- const nav = toolNavigation(ru,prefix).replace('</nav>',`<a href="${prefix}guides/">${labels[3]}</a></nav>`);
+ const nav = toolNavigation(ru,prefix);
  function write(slug,title,description,body,mode='') {
   const content=toolContent[slug];
   if(content){title=content.title[Number(ru)];description=content.description[Number(ru)];body=body.replace('</main>',advice(slug,ru,prefix)+'</main>');}
@@ -43,12 +43,13 @@ for (const lang of Object.keys(languages)) {
   const localizedPath=code=>localePrefix(code)+(slug?slug+'/':'');
   const seo = origin ? `<link rel="canonical" href="${origin}${path}">${Object.keys(languages).map(code=>`<link rel="alternate" hreflang="${code}" href="${origin}${localizedPath(code)}">`).join('')}<link rel="alternate" hreflang="x-default" href="${origin}${localizedPath('en')}"><meta property="og:url" content="${origin}${path}">` : '<meta name="robots" content="noindex,follow">';
   const language = `<details class="language-picker"><summary lang="${lang}">${languages[lang]}</summary><nav aria-label="Language">${Object.entries(languages).map(([code,label])=>`<a href="${localizedPath(code)}" lang="${code}" hreflang="${code}"${code===lang?' aria-current="page"':''}>${label}</a>`).join('')}</nav></details><input type="hidden" id="language" value="${lang}">`;
-  let html = body.replace(/<html lang="en">/,`<html lang="${lang}">`).replace(/<title>.*?<\/title>/,`<title>${title}</title>`).replace(/<meta name="description"[^>]*>/,`<meta name="description" content="${escape(description)}">${seo}<meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:type" content="website"><meta name="color-scheme" content="light">`).replace('href="styles.css"','href="/styles.css"').replace('src="app.js"','src="/app.js"').replace('<script src="/workspace-ui.js"',`${dictionaries[lang]?`<script src="/locales/${lang}.js" defer></script>`:''}<script src="/i18n.js" defer></script><script src="/workspace-ui.js"`).replace('</head>','<script src="/catalog.js" defer></script></head>').replace('<body>',`<body data-language="${lang}" data-mode="${mode}" data-page-title="${escape(title)}">`).replace(/<div class="language-control">.*?<\/div>/,language).replace('href="/" class="brand"',`href="${prefix}" class="brand"`).replace('</header>',`</header>${nav}`).replace(/<footer>.*?<\/footer>/s,`<footer>© ${new Date().getFullYear()} FileConvert${footerNav}</footer>`);
+  let html = body.replace(/<html lang="en">/,`<html lang="${lang}">`).replace(/<title>.*?<\/title>/,`<title>${title}</title>`).replace(/<meta name="description"[^>]*>/,`<meta name="description" content="${escape(description)}">${seo}<meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:type" content="website"><meta name="color-scheme" content="light">`).replace('href="styles.css"','href="/styles.css"').replace('src="app.js"','src="/app.js"').replace('<script src="/workspace-ui.js"',`${dictionaries[lang]?`<script src="/locales/${lang}.js" defer></script>`:''}<script src="/i18n.js" defer></script><script src="/workspace-ui.js"`).replace('</head>','<script src="/catalog.js" defer></script></head>').replace('<body>',`<body data-language="${lang}" data-mode="${mode}" data-page-title="${escape(title)}">`).replace(/<div class="language-control">.*?<\/div>/,language).replace('href="/" class="brand"',`href="${prefix}" class="brand"`).replace('<!--tool-navigation-->',nav).replace(/<footer>.*?<\/footer>/s,`<footer>© ${new Date().getFullYear()} FileConvert${footerNav}</footer>`);
   if(mode) {
    html=html.replace(/data-i18n="title"/,'').replace(/<h1[^>]*>.*?<\/h1>/,`<h1>${title.replace(/ [|—] FileConvert$/,'')}</h1>`);
    html=html.replace(/<button class="mode-tab[^>]*data-mode="(.*?)"[^>]*>(.*?)<\/button>/g,(_,m,text)=>`<a class="mode-tab${m===mode?' active':''}" href="${prefix}${m==='jpg-png'?'jpg-to-png':'png-to-jpg'}/">${text}</a>`);
   }
   html=html.replace(/(<[a-z0-9]+[^>]*data-i18n="([^"]+)"[^>]*>)([^<]*)(<\/[^>]+>)/g,(_,a,k,b,c)=>a+(translations[ru?'ru':'en'][k]||b)+c);
+  if(ru)html=html.replace('aria-label="FileConvert home"','aria-label="Главная FileConvert"').replace('<span class="sr-only">Tools</span>','<span class="sr-only">Инструменты</span>');
   html=localizeHtml(html,lang);
   if(lang==='ar')html=html.replace('<html lang="ar">','<html lang="ar" dir="rtl">');
   const dir = 'dist'+path; fs.mkdirSync(dir,{recursive:true}); fs.writeFileSync(dir+'index.html',html);

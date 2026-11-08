@@ -73,6 +73,7 @@ with sync_playwright() as p:
    first.locator('[data-action=rotate]').click();page.locator('[data-preview-page="2"] [data-action=delete]').click()
    assert page.locator('[data-preview-page]:visible').count()==2
    page.locator('#workspace-undo').click();assert page.locator('[data-preview-page]:visible').count()==3
+   first.scroll_into_view_if_needed()  # Keep the complete target card visible before starting a native drag.
    page.locator('[data-preview-page="3"] .page-drag').drag_to(first)
    assert page.locator('[data-preview-page]').first.get_attribute('data-preview-page')=='3'
    page.locator('#workspace-undo').click();assert page.locator('[data-preview-page]').first.get_attribute('data-preview-page')=='1'

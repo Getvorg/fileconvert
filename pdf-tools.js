@@ -1,3 +1,4 @@
+import {appendPages} from './pdf-page-actions.js';
 import {LiveStampPreview} from './live-stamp.js';
 import {zipSync} from '/vendor/fflate.mjs';
 import {PDFThumbnails} from './pdf-thumbnails.js';
@@ -9,6 +10,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  const tool=root.dataset.pdfTool, png=tool==='png-to-pdf',raster=tool==='pdf-to-jpg'||tool==='pdf-to-png',jpg=tool==='jpg-to-pdf'||png, merge=tool==='merge-pdf', split=tool==='split-pdf';
  const stamps=tool==='number-pdf'||tool==='watermark-pdf';
  const extra=['number-pdf','watermark-pdf','extract-images','compress-pdf'].includes(tool);
+ const pageEditing=['split-pdf','rotate-pdf','number-pdf','watermark-pdf','pdf-to-jpg','pdf-to-png'].includes(tool);
  const get=id=>document.getElementById(id);
  const input=get('pdf-files'), run=get('pdf-run'), list=get('pdf-file-list'), feedback=get('pdf-feedback'), results=get('pdf-results');
  const runLabel=run.textContent;
@@ -28,6 +30,13 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  function snapshot(){storeDocumentEdits();return {activeIndex,documentEdits:[...documentEdits],files:[...files],stampFile:get('stamp-image')?.files[0]||null,retainedFiles:get('stamp-image')?.files[0]?[get('stamp-image').files[0]]:[],imageTurns:[...imageTurns],pageTurns:[...pageTurns],removed:[...removedPages],order:[...pageOrder],settings:settings()};}
  function remember(previous){const state=snapshot();if(previous)state.settings={...previous};edits.push(state);undo.update(edits.length,busy);}
  function defaultName(){const base=files[activeIndex]?.name.replace(/\.[^.]+$/,'')||'document';return stamps&&files.length>1?'stamped-documents.zip':extra?base+'-'+(tool==='extract-images'?'images.zip':'result.pdf'):jpg?'images.pdf':raster?base+'-images.zip':split?(get('split-mode').value==='each'?base+'-pages.zip':base+'-extracted.pdf'):base+'-rotated.pdf';}
+ let insertAfter=0;const insertInput=document.createElement('input');insertInput.type='file';insertInput.multiple=true;insertInput.accept='application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp';insertInput.className='sr-only';insertInput.tabIndex=-1;insertInput.disabled=!pageEditing;insertInput.setAttribute('aria-label',tr('Insert files after page','Вставить файлы после страницы'));insertInput.id='pdf-insert-files';root.append(insertInput);insertInput.addEventListener('change',()=>{const incoming=[...insertInput.files];insertInput.value='';if(incoming.length)void editPages('insert',insertAfter,incoming);});
+ async function editPages(kind,index,inputs=[]){
+  if(busy||!files[activeIndex]||!previews?.cards.length)return;const previous=snapshot(),old=files[activeIndex],selected=selectedPages(previews.cards.length),range=get('page-range').value;busy=true;render();feedback.dataset.state='working';feedback.textContent=tr('Preparing…','Подготовка…');
+  try{if(inputs.length+files.length>50)throw Error();const result=await appendPages(old,{kind,index,inputs,t:tr,maxBytes:MAX_TOTAL-files.filter((_,i)=>i!==activeIndex).reduce((n,f)=>n+f.size,0)});edits.push(previous);const order=[...orderFor(result.count)],at=order.indexOf(index);order.splice(at<0?order.length:at+1,0,...result.added);pageOrder=order;result.added.forEach(id=>{pageTurns.set(id,kind==='duplicate'?turn(index):0);selected.add(id);});if(range.trim())get('page-range').value=order.filter(id=>selected.has(id)).map(id=>id+1).join(',');files[activeIndex]=result.file;documentEdits.delete(old);previewFile=result.file;previews.ready=previews.setFile(result.file);await previews.ready;invalidate();
+  }catch{feedback.dataset.state='error';feedback.textContent=tr('Could not add pages. Use supported PDFs or images within the file and page limits. Current edits are kept.','Не удалось добавить страницы. Проверьте формат PDF или изображений и лимиты файлов и страниц. Текущие изменения сохранены.');}
+  finally{busy=false;render();}
+ }
  const imageUrls=new Map(), imageTurns=new Map(), pageTurns=new Map(), removedPages=new Set();
  const turn=index=>pageTurns.get(index)||0;
  const orderFor=count=>pageOrder.length===count?pageOrder:Array.from({length:count},(_,i)=>i);
@@ -35,6 +44,8 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  function selectedPages(count){try{return new Set(indices(count));}catch{return new Set();}}
  const previews=jpg?null:new PDFThumbnails(get('pdf-page-previews'),{
   t:tr,
+  selectable:()=>tool!=='compress-pdf'&&!(split&&get('split-mode').value==='each'),
+  onPageAction:pageEditing?(kind,index)=>{if(kind==='insert'){insertAfter=index;insertInput.click();}else void editPages(kind,index);}:null,
   selection:count=>tool==='compress-pdf'||(split&&get('split-mode').value==='each')?new Set(remaining(count)):selectedPages(count),
   disabled:()=>busy||tool==='compress-pdf'||(split&&get('split-mode').value==='each'),
   order:count=>orderFor(count),onReady:count=>{if(pageOrder.length!==count)pageOrder=Array.from({length:count},(_,i)=>i);live?.request();},
@@ -46,7 +57,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   onToggle:(index,count)=>{
    if(busy)return;
    const selected=selectedPages(count);
-   if(selected.has(index)){if(selected.size===1){feedback.textContent=tr('Keep at least one page selected.','Оставьте хотя бы одну выбранную страницу.');return;}selected.delete(index);}else selected.add(index);
+   if(selected.has(index)){if(selected.size===1){feedback.dataset.state='error';feedback.textContent=tr('Keep at least one page selected.','Оставьте хотя бы одну выбранную страницу.');return;}selected.delete(index);}else selected.add(index);
    remember();get('page-range').value=[...selected].map(i=>i+1).join(',');invalidate();
   }
  });
@@ -56,19 +67,30 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  function indicesFor(state,count){const order=state.order.length===count?state.order:Array.from({length:count},(_,i)=>i),removed=new Set(state.removed);if(!state.range.trim())return order.filter(i=>!removed.has(i));const result=new Set();for(const part of state.range.split(',')){const m=/^\s*(\d+)\s*(?:-\s*(\d+)\s*)?$/.exec(part);if(!m)throw Error(tr('Invalid page range.','Некорректный диапазон страниц.'));const start=Number(m[1]),end=Number(m[2]||m[1]);if(start<1||end<start||end>count)throw Error(tr('Page range exceeds document length.','Диапазон превышает число страниц документа.'));for(let i=start;i<=end;i++)if(!removed.has(i-1))result.add(i-1);}if(!result.size)throw Error(tr('Choose at least one page.','Выберите хотя бы одну страницу.'));return [...result];}
  if(stamps){live=new LiveStampPreview({tool,helper:previews,file:()=>files[activeIndex],status:get('live-preview-status'),t:tr,state:count=>({order:remaining(count),selected:indices(count),turns:new Map(pageTurns),settings:settings(),imageFile:get('stamp-image')?.files[0]})});}
  function clearResults() { urls.forEach(url=>URL.revokeObjectURL(url)); urls=[]; results.replaceChildren();savePanel.invalidate(); }
- function invalidate() { clearResults();savePanel.invalidate();savePanel.setDefault(defaultName());lastSettings=settings();storeDocumentEdits();live?.request(); feedback.textContent=''; }
+ function invalidate() { clearResults();savePanel.invalidate();savePanel.setDefault(defaultName());lastSettings=settings();storeDocumentEdits();live?.request(); feedback.removeAttribute('data-state');feedback.textContent=''; }
+ if(split){const mode=get('split-mode').closest('.pdf-settings'),primary=document.createElement('div');primary.className='primary-tool-options';mode.before(primary);primary.append(mode);get('pdf-page-previews').before(primary);}
+ if(jpg){const options=document.createElement('div');options.className='lab-options image-options';options.append(get('page-size').closest('.pdf-settings'));savePanel.panel.querySelector('label').before(options);}
+ if(extra&&root.querySelector('.lab-options')){const options=root.querySelector('.lab-options');options.classList.add('stamp-options');savePanel.panel.querySelector('label').before(options);}
+ if(tool==='rotate-pdf'){const rotateAll=document.createElement('button');rotateAll.id='rotate-all';rotateAll.hidden=true;rotateAll.type='button';rotateAll.className='secondary-button rotate-all-pages';rotateAll.textContent=tr('Rotate all pages','Повернуть все страницы');rotateAll.addEventListener('click',()=>{if(busy||!previews.cards.length)return;remember();remaining(previews.cards.length).forEach(index=>pageTurns.set(index,(turn(index)+90)%360));invalidate();previews.refresh();});get('pdf-stage-controls').after(rotateAll);}
+ if(stamps){get('batch-document').closest('label').hidden=true;root.querySelector('.batch-preview-help').hidden=true;}
  function syncExtraOptions(){
+  if(get('stamp-position'))for(const id of ['stamp-x','stamp-y'])get(id).closest('.pdf-settings').hidden=get('stamp-position').value!=='custom';
   if(get('stamp-kind')){const image=get('stamp-kind').value==='image';get('stamp-image').closest('.pdf-settings').hidden=!image;get('stamp-text').closest('.pdf-settings').hidden=image;get('stamp-color').closest('.pdf-settings').hidden=image;get('stamp-size').labels[0].textContent=image?tr('Image width (%)','Ширина изображения (%)'):tr('Text size','Размер текста');get('stamp-size').min=image?'1':'6';get('stamp-size').max=image?'90':'144';}
   if(get('compress-mode')){get('range-settings').hidden=true;const raster=get('compress-mode').value==='raster';get('compress-quality').closest('.pdf-settings').hidden=!raster;get('compress-dpi').closest('.pdf-settings').hidden=!raster;}
+  get('tool-settings').hidden=![...get('tool-settings').querySelectorAll('.pdf-settings')].some(field=>!field.hidden);
  }
  function render() {
+  insertInput.disabled=busy||!pageEditing;
   syncExtraOptions();
   savePanel.setDefault(defaultName());undo.update(edits.length,busy);
   list.replaceChildren();
   const loaded=files.length>0;
   get('pdf-dropzone').hidden=loaded;get('selection-help').hidden=loaded;get('pdf-stage-controls').hidden=!loaded;
-  get('pdf-pick').disabled=busy;if(get('batch-remove'))get('batch-remove').disabled=busy;if(get('batch-document')){const picker=get('batch-document');picker.replaceChildren();files.forEach((file,i)=>{const option=document.createElement('option');option.value=i;option.textContent=file.name;picker.append(option);});picker.value=activeIndex;picker.disabled=busy;picker.closest('label').hidden=!loaded;}if(get('pdf-reset-pages'))get('pdf-reset-pages').disabled=busy;if(get('pdf-clear'))get('pdf-clear').disabled=busy;
-  list.hidden=!loaded;
+  if(get('rotate-all')){get('rotate-all').hidden=!loaded;get('rotate-all').disabled=busy;}
+  const batchHelp=root.querySelector('.batch-preview-help');if(batchHelp)batchHelp.hidden=files.length<2;
+  get('pdf-pick').disabled=busy;if(get('batch-remove')){get('batch-remove').disabled=busy;get('batch-remove').hidden=files.length<2;}if(get('batch-document')){const picker=get('batch-document');picker.replaceChildren();files.forEach((file,i)=>{const option=document.createElement('option');option.value=i;option.textContent=file.name;picker.append(option);});picker.value=activeIndex;picker.disabled=busy;picker.closest('label').hidden=files.length<2;}if(get('pdf-reset-pages'))get('pdf-reset-pages').disabled=busy;if(get('pdf-clear'))get('pdf-clear').disabled=busy;
+  list.hidden=!loaded||(stamps&&files.length>1);
+  if(stamps)get('pdf-clear').textContent=files.length>1?tr('Remove all PDFs','Удалить все PDF'):tr('Remove PDF','Удалить PDF');
   get('pdf-page-previews').hidden=jpg||!loaded;
   for(const [file,url] of imageUrls){if(!files.includes(file)){URL.revokeObjectURL(url);imageUrls.delete(file);imageTurns.delete(file);}}
   if(previews && files[activeIndex]!==previewFile){previewFile=files[activeIndex];removedPages.clear();pageTurns.clear();pageOrder=[];if(stamps)restoreDocument(previewFile);previews.ready=previews.setFile(previewFile);}
@@ -125,7 +147,7 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
  for(const type of ['dragleave','drop']) drop.addEventListener(type,e=>{e.preventDefault();drop.classList.remove('dragging');});
  drop.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
  root.querySelectorAll('#page-size,#page-range,#rotation,#split-mode,#render-dpi,[data-extra-option]').forEach(control=>control.addEventListener('input',()=>{remember(lastSettings);invalidate();syncExtraOptions();previews?.refresh();}));
- get('split-mode')?.addEventListener('change',()=>{get('range-settings').hidden=get('split-mode').value==='each';previews?.refresh();});
+ get('split-mode')?.addEventListener('change',()=>{get('range-settings').hidden=get('split-mode').value==='each';syncExtraOptions();previews?.refresh();});
  function indices(count) {
   const value=get('page-range').value.trim();
   if(!value)return remaining(count);
@@ -242,12 +264,12 @@ import {PDFThumbnails} from './pdf-thumbnails.js';
   if(busy||run.disabled) return;
   busy=true;invalidate();savePanel.begin();
   root.querySelectorAll('input,select').forEach(control=>control.disabled=true);render();root.setAttribute('aria-busy','true');
-  run.textContent=tr('Processing…','Обработка…');feedback.textContent=tr('Processing on your device…','Обработка на вашем устройстве…');
+  run.textContent=tr('Processing…','Обработка…');feedback.dataset.state='working';feedback.textContent='';
   try {
    if(!window.PDFLib) throw Error(tr('PDF library did not load. Reload the page.','Библиотека PDF не загрузилась. Перезагрузите страницу.'));
    await new Promise(resolve=>setTimeout(resolve,0));
-   await processPdf();feedback.textContent=(feedback.textContent?feedback.textContent+' · ':'')+tr('Ready. Download and check your files.','Готово. Скачайте и проверьте файлы.');
-  }catch(error){clearResults();savePanel.fail();feedback.textContent=error.message||tr('Could not process these files. Try a smaller document.','Не удалось обработать файлы. Попробуйте документ меньшего размера.');}
+   await processPdf();feedback.dataset.state='success';
+  }catch(error){clearResults();savePanel.fail();feedback.dataset.state='error';feedback.textContent=error.message||tr('Could not process these files. Try a smaller document.','Не удалось обработать файлы. Попробуйте документ меньшего размера.');}
   finally{busy=false;savePanel.idle();root.removeAttribute('aria-busy');root.querySelectorAll('input,select').forEach(control=>control.disabled=false);run.textContent=runLabel;render();if(results.firstElementChild) results.firstElementChild.focus();}
  });
  FileWorkspace.reorder(list,{selector:'li[data-file-index]',key:card=>Number(card.dataset.fileIndex),busy:()=>busy,onMove:(from,to)=>{remember();files.splice(to,0,...files.splice(from,1));invalidate();render();}});

@@ -3,6 +3,7 @@ const root=document.querySelector('[data-image-lab]');
 const mode=root.dataset.imageLab,resize=mode==='resize',crop=mode==='crop',convert=mode==='convert',suffix=resize?'resized':crop?'cropped':convert?'converted':'compressed',t=(en,r)=>FileI18n.t(en,r),get=id=>document.getElementById(id);
 const input=get('lab-files'),cards=get('lab-cards'),run=get('lab-run'),results=get('lab-results'),feedback=get('lab-feedback');
 const panel=FileWorkspace.savePanel({root,button:run,results,name:resize?'resized.zip':'compressed.zip'}),edits=FileWorkspace.history();
+const optionPanel=root.querySelector('.lab-options');optionPanel.classList.add('image-options');panel.panel.querySelector('label').before(optionPanel);
 let records=[],busy=false,downloadURL=null,previousSettings={},dragSerial=0;
 const optionIds=['lab-width','lab-height','lab-fit','lab-upscale','lab-format','lab-quality','lab-background','crop-ratio'];
 const settings=()=>Object.fromEntries(optionIds.filter(id=>get(id)).map(id=>[id,get(id).type==='checkbox'?get(id).checked:get(id).value]));
