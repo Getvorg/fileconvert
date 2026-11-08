@@ -1,3 +1,4 @@
+import {toolContent,advice,guides,guideIndex,guidePage} from './seo-content.mjs';
 import {languages,dictionaries,localePrefix,localizeHtml} from './localization.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -32,17 +33,19 @@ const paths = [];
 const escape = s => s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
 for (const lang of Object.keys(languages)) {
  const ru = lang === 'ru', prefix = localePrefix(lang);
- const labels = ru ? ['О проекте','Контакты','Конфиденциальность'] : ['About','Contact','Privacy Policy'];
- const footerNav = `<nav aria-label="${ru?'Информация':'Information'}">${['about','contact','privacy'].map((p,i)=>`<a href="${prefix}${p}/">${labels[i]}</a>`).join('')}</nav>`;
- const nav = toolNavigation(ru,prefix);
+ const labels = ru ? ['О проекте','Контакты','Конфиденциальность','Инструкции'] : ['About','Contact','Privacy Policy','Guides'];
+ const footerNav = `<nav aria-label="${ru?'Информация':'Information'}">${['about','contact','privacy','guides'].map((p,i)=>`<a href="${prefix}${p}/">${labels[i]}</a>`).join('')}</nav>`;
+ const nav = toolNavigation(ru,prefix).replace('</nav>',`<a href="${prefix}guides/">${labels[3]}</a></nav>`);
  function write(slug,title,description,body,mode='') {
+  const content=toolContent[slug];
+  if(content){title=content.title[Number(ru)];description=content.description[Number(ru)];body=body.replace('</main>',advice(slug,ru,prefix)+'</main>');}
   const path = prefix + (slug ? slug+'/' : ''); paths.push(path);
   const localizedPath=code=>localePrefix(code)+(slug?slug+'/':'');
   const seo = origin ? `<link rel="canonical" href="${origin}${path}">${Object.keys(languages).map(code=>`<link rel="alternate" hreflang="${code}" href="${origin}${localizedPath(code)}">`).join('')}<link rel="alternate" hreflang="x-default" href="${origin}${localizedPath('en')}"><meta property="og:url" content="${origin}${path}">` : '<meta name="robots" content="noindex,follow">';
   const language = `<details class="language-picker"><summary lang="${lang}">${languages[lang]}</summary><nav aria-label="Language">${Object.entries(languages).map(([code,label])=>`<a href="${localizedPath(code)}" lang="${code}" hreflang="${code}"${code===lang?' aria-current="page"':''}>${label}</a>`).join('')}</nav></details><input type="hidden" id="language" value="${lang}">`;
   let html = body.replace(/<html lang="en">/,`<html lang="${lang}">`).replace(/<title>.*?<\/title>/,`<title>${title}</title>`).replace(/<meta name="description"[^>]*>/,`<meta name="description" content="${escape(description)}">${seo}<meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:type" content="website"><meta name="color-scheme" content="light">`).replace('href="styles.css"','href="/styles.css"').replace('src="app.js"','src="/app.js"').replace('<script src="/workspace-ui.js"',`${dictionaries[lang]?`<script src="/locales/${lang}.js" defer></script>`:''}<script src="/i18n.js" defer></script><script src="/workspace-ui.js"`).replace('</head>','<script src="/catalog.js" defer></script></head>').replace('<body>',`<body data-language="${lang}" data-mode="${mode}" data-page-title="${escape(title)}">`).replace(/<div class="language-control">.*?<\/div>/,language).replace('href="/" class="brand"',`href="${prefix}" class="brand"`).replace('</header>',`</header>${nav}`).replace(/<footer>.*?<\/footer>/s,`<footer>© ${new Date().getFullYear()} FileConvert${footerNav}</footer>`);
   if(mode) {
-   html=html.replace(/data-i18n="title"/,'').replace(/<h1[^>]*>.*?<\/h1>/,`<h1>${title.replace(' | FileConvert','')}</h1>`);
+   html=html.replace(/data-i18n="title"/,'').replace(/<h1[^>]*>.*?<\/h1>/,`<h1>${title.replace(/ [|—] FileConvert$/,'')}</h1>`);
    html=html.replace(/<button class="mode-tab[^>]*data-mode="(.*?)"[^>]*>(.*?)<\/button>/g,(_,m,text)=>`<a class="mode-tab${m===mode?' active':''}" href="${prefix}${m==='jpg-png'?'jpg-to-png':'png-to-jpg'}/">${text}</a>`);
   }
   html=html.replace(/(<[a-z0-9]+[^>]*data-i18n="([^"]+)"[^>]*>)([^<]*)(<\/[^>]+>)/g,(_,a,k,b,c)=>a+(translations[ru?'ru':'en'][k]||b)+c);
@@ -70,6 +73,8 @@ for (const lang of Object.keys(languages)) {
  const organizer = tools.find(tool=>tool.slug===slug);
  write(organizer.slug,`${organizer.name[Number(ru)]} ${ru?'онлайн бесплатно':'Online Free'} | FileConvert`,organizer.description[Number(ru)],pageShell(organizePage(ru,slug==='merge-pdf'),'<script src="/vendor/pdf-lib.min.js" defer></script><script src="/pdf-organizer.js" type="module"></script>'));
  }
+ write('guides',`${ru?'Инструкции по работе с PDF и изображениями':'PDF and image conversion guides'} | FileConvert`,ru?'Пошаговые инструкции по объединению PDF и фотографий, разделению страниц и сжатию изображений.':'Step-by-step guides to merging PDFs and photos, splitting PDF pages and compressing images.',pageShell(guideIndex(ru,prefix)));
+ for(const guide of guides)write('guides/'+guide.slug,guide.title[Number(ru)]+' | FileConvert',guide.description[Number(ru)],pageShell(guidePage(guide,ru,prefix)));
  const content={
  about:ru?'<h1>О FileConvert</h1><p>FileConvert — бесплатный инструмент для работы с PDF и изображениями в браузере. Регистрация не требуется.</p><h2>Как это работает</h2><p>Файлы открываются и обрабатываются локально в вашем браузере. Мы не получаем содержимое выбранных файлов.</p><h2>Доступные инструменты</h2><p>Доступны JPG → PNG, PNG → JPG, JPG/PNG → PDF, PDF → JPG/PNG, сжатие и изменение размеров изображений, объединение, разделение и поворот PDF, визуальное удаление и перестановка страниц, нумерация, водяные знаки, сжатие PDF, обрезка и конвертация WebP. Все инструменты работают в браузере.</p>':'<h1>About FileConvert</h1><p>FileConvert is a free browser tool for working with PDFs and images without an account.</p><h2>How it works</h2><p>Your browser opens and processes files locally on your device. We do not receive selected file contents.</p><h2>Available tools</h2><p>JPG → PNG, PNG → JPG, JPG/PNG → PDF, PDF → JPG/PNG, image compression and resizing, PDF merge, split, rotation, visual page organization, numbering, watermarks, PDF compression, cropping and WebP conversions are available. All tools work in your browser.</p>',
  contact:`<h1>${labels[1]}</h1><p>${ru?'Сообщите об ошибке или предложите улучшение. Укажите браузер, устройство и шаги воспроизведения. Не отправляйте личные документы и конфиденциальные изображения.':'Report a bug or suggest an improvement. Include your browser, device and steps to reproduce. Do not send personal documents or confidential images.'}</p>${email?`<p><a href="mailto:${email}">${email}</a></p>`:`<p><a href="https://github.com/Getvorg/fileconvert/issues">${ru?'Создать публичное обращение на GitHub':'Open a public issue on GitHub'}</a></p><p>${ru?'Обращения видны всем; для отправки нужен аккаунт GitHub.':'Issues are public and require a GitHub account to submit.'}</p>`}`,

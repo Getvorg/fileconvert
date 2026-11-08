@@ -11,7 +11,7 @@ class Page(HTMLParser):
 english=[]
 for path in (ROOT/'dist').rglob('index.html'):
  if path.relative_to(ROOT/'dist').parts[0] not in LOCALES[1:]:english.append(path.relative_to(ROOT/'dist'))
-assert len(english)==25
+assert len(english)==29
 messages={lang:json.loads((ROOT/'locales'/f'{lang}.json').read_text()) for lang in LOCALES[2:]}
 keys=set(messages['uk'])
 for lang,dictionary in messages.items():
@@ -59,4 +59,4 @@ for path in ROOT.glob('*.js'):
   def placeholder(m):n=index[0];index[0]+=1;return '{'+str(n)+'}'
   if literal.startswith('`'):value=re.sub(r'\$\{[^}]+\}',placeholder,value)
   if re.search('[a-zA-Z]',value):assert value.strip() in keys,(path,value)
-print('PASS: 550 localized pages, 20 complete dictionaries, dynamic placeholders, language links, asset order and SEO alternates')
+print('PASS: 638 localized pages, 20 complete dictionaries, dynamic placeholders, language links, asset order and SEO alternates')
